@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# content sources (third-party, fetched locally; see content/README.md)
+content/sources/

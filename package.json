@@ -4,6 +4,9 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~58.0.26",
+    "expo-asset": "~58.0.21",
+    "expo-font": "~58.0.12",
+    "expo-sqlite": "~58.0.18",
     "expo-status-bar": "~58.0.5",
     "react": "19.3.0",
     "react-native": "0.88.1"
@@ -12,7 +15,9 @@
     "@react-native/jest-preset": "^0.88.1",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
+    "@types/node": "^24.19.2",
     "@types/react": "~19.3.0",
+    "babel-preset-expo": "^58.0.26",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
     "eslint-config-prettier": "^10.1.8",
@@ -31,7 +36,9 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test -- --ci"
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test -- --ci",
+    "content:fetch": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/content-build/fetch-sources.ts",
+    "content:build": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tools/content-build/cli.ts"
   },
   "private": true
 }
