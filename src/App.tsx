@@ -1,42 +1,36 @@
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-export default function App() {
-  const isDark = useColorScheme() === 'dark';
+import { ContentProvider } from './content/ContentProvider';
+import { SurahScreen } from './reading/SurahScreen';
+import { QURAN_FONTS } from './theme/quranFont';
 
+const AL_FATIHA = 1;
+
+function Loading() {
   return (
-    <View style={[styles.container, isDark && styles.containerDark]}>
-      <Text style={[styles.title, isDark && styles.textDark]}>Lisan</Text>
-      <Text style={[styles.subtitle, isDark && styles.textDark]}>
-        Understand the Quran&apos;s Arabic
-      </Text>
-      <StatusBar style="auto" />
+    <View style={styles.centered}>
+      <ActivityIndicator />
     </View>
   );
 }
 
+export default function App() {
+  // If the Quran font fails to load, carry on with the system font rather than spinning forever.
+  const [fontsLoaded, fontError] = useFonts(QURAN_FONTS);
+  if (!fontsLoaded && !fontError) return <Loading />;
+
+  return (
+    <>
+      <ContentProvider>
+        <SurahScreen surah={AL_FATIHA} />
+      </ContentProvider>
+      <StatusBar style="auto" />
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  containerDark: {
-    backgroundColor: '#111',
-  },
-  title: {
-    fontSize: 40,
-    fontWeight: '700',
-    color: '#111',
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 16,
-    color: '#444',
-  },
-  textDark: {
-    color: '#eee',
-  },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
