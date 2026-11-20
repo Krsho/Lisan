@@ -10,6 +10,7 @@ Requires Node 24.
 
 ```sh
 npm install
+npm run content:fetch   # downloads the Quran font and content sources (not in git)
 npm start          # start the Expo dev server, then open it in Expo Go
 npm test           # run tests
 npm run check      # everything CI runs

@@ -42,3 +42,5 @@ yarn-error.*
 
 # content sources (third-party, fetched locally; see content/README.md)
 content/sources/
+# KFGQPC font: not redistributable until KFGQPC grants permission (fetched by content:fetch)
+assets/fonts/UthmanicHafs-v9.otf
