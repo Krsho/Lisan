@@ -31,12 +31,16 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
+function openSqlRunnerTracked(file: string) {
+  const db = openSqlRunner(file);
+  openDatabases.push(db);
+  return db;
+}
+
 function build(overrides: Partial<Parameters<typeof buildContentDatabase>[0]> = {}) {
   const outFile = join(dir, 'content.db');
   buildContentDatabase({ ...sources(), surahs: [1], contentVersion: 1, outFile, ...overrides });
-  const db = openSqlRunner(outFile);
-  openDatabases.push(db);
-  return createContentRepository(db);
+  return createContentRepository(openSqlRunnerTracked(outFile));
 }
 
 describe('content build', () => {
@@ -90,6 +94,23 @@ describe('content build', () => {
     expect(() => build({ morphologyText: morphologyMissingAWord })).toThrow(
       'Word count mismatch in 1:4',
     );
+  });
+
+  it('leaves the previous database untouched when a build fails', async () => {
+    const outFile = join(dir, 'content.db');
+    const options = { ...sources(), surahs: [1], contentVersion: 1, outFile };
+    buildContentDatabase(options);
+    const brokenMorphology = sources()
+      .morphologyText.split('\n')
+      .filter((line) => !line.startsWith('1:4:3:'))
+      .join('\n');
+
+    expect(() => buildContentDatabase({ ...options, morphologyText: brokenMorphology })).toThrow(
+      'Word count mismatch',
+    );
+
+    const content = createContentRepository(openSqlRunnerTracked(join(dir, 'content.db')));
+    expect(await content.getSurah(1, 'en')).toHaveLength(7);
   });
 
   it('refuses glosses that do not line up with the words', () => {

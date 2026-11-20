@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, renameSync, rmSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { parseMorphology, type Segment } from './morphology.ts';
@@ -48,8 +48,12 @@ export function buildContentDatabase(options: BuildOptions): void {
   const segments = parseMorphology(options.morphologyText).filter((s) => wanted.has(s.surah));
   const segmentsByAyah = groupByAyah(segments);
 
-  if (existsSync(outFile)) rmSync(outFile);
-  const db = new DatabaseSync(outFile);
+  // Build into a temporary file and only replace outFile once the build succeeds,
+  // so a failed build never clobbers the previous (committed) database.
+  const tempFile = `${outFile}.building`;
+  if (existsSync(tempFile)) rmSync(tempFile);
+  const db = new DatabaseSync(tempFile);
+  let succeeded = false;
   try {
     db.exec(SCHEMA);
     db.exec('BEGIN');
@@ -91,9 +95,12 @@ export function buildContentDatabase(options: BuildOptions): void {
       }
     }
     db.exec('COMMIT');
+    succeeded = true;
   } finally {
     db.close();
+    if (!succeeded) rmSync(tempFile, { force: true });
   }
+  renameSync(tempFile, outFile);
 }
 
 function groupByAyah(segments: Segment[]): Map<string, Segment[]> {

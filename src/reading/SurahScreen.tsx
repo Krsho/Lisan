@@ -18,14 +18,21 @@ const toArabicDigits = (n: number) =>
 export function SurahScreen({ surah }: { surah: number }) {
   const content = useContent();
   const [ayahs, setAyahs] = useState<Ayah[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const isDark = useColorScheme() === 'dark';
   const colors = isDark ? darkColors : lightColors;
 
   useEffect(() => {
     let cancelled = false;
-    content.getSurah(surah, 'en').then((result) => {
-      if (!cancelled) setAyahs(result);
-    });
+    content.getSurah(surah, 'en').then(
+      (result) => {
+        if (!cancelled) setAyahs(result);
+      },
+      (error: unknown) => {
+        console.error('Failed to load surah', surah, error);
+        if (!cancelled) setFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -34,7 +41,11 @@ export function SurahScreen({ surah }: { surah: number }) {
   if (!ayahs) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator />
+        {failed ? (
+          <Text style={{ color: colors.text }}>Couldn&apos;t load this surah.</Text>
+        ) : (
+          <ActivityIndicator />
+        )}
       </View>
     );
   }

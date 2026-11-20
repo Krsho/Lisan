@@ -17,8 +17,9 @@ function Loading() {
 }
 
 export default function App() {
-  const [fontsLoaded] = useFonts(QURAN_FONTS);
-  if (!fontsLoaded) return <Loading />;
+  // If the Quran font fails to load, carry on with the system font rather than spinning forever.
+  const [fontsLoaded, fontError] = useFonts(QURAN_FONTS);
+  if (!fontsLoaded && !fontError) return <Loading />;
 
   return (
     <>
