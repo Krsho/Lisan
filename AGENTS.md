@@ -25,4 +25,4 @@ This is an Expo / React Native app (Expo SDK 58). Expo ships breaking changes ev
 
 ## Checks
 
-Run before declaring work done: `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm test`. CI runs the same on every push and pull request.
+Run `npm run check` before declaring work done (typecheck, lint, format check, tests). CI runs the same command on every push and pull request.

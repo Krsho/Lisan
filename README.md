@@ -12,6 +12,7 @@ Requires Node 24.
 npm install
 npm start          # start the Expo dev server, then open it in Expo Go
 npm test           # run tests
+npm run check      # everything CI runs
 npm run typecheck  # TypeScript
 npm run lint       # ESLint
 npm run format     # Prettier
@@ -19,4 +20,4 @@ npm run format     # Prettier
 
 ## License
 
-[GPL-3.0](LICENSE). Quran text, morphology, translation and tafsir data come from third-party sources credited inside the app.
+[GPL-3.0](LICENSE). Quran text, morphology, translation and tafsir data come from third-party sources credited in the app once added.
