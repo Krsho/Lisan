@@ -13,3 +13,16 @@ Uses the five default triage labels: `needs-triage`, `needs-info`, `ready-for-ag
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Expo
+
+This is an Expo / React Native app (Expo SDK 58). Expo ships breaking changes every SDK release, so don't trust remembered APIs: check the versioned docs at `https://docs.expo.dev/versions/v58.0.0/` or the index at https://docs.expo.dev/llms.txt before using an Expo, EAS or React Native API.
+
+- Add packages with `npx expo install <package>` so versions match the SDK. If that fails on this npm version (`EALLOWSCRIPTS`), look up the SDK version in `expo/bundledNativeModules.json` and `npm install` it directly.
+- `ios/` and `android/` are generated; never edit them by hand. Configure native behaviour in `app.json` and config plugins.
+- Expo Go only includes its bundled native modules. Prefer libraries that work in Expo Go; development testing happens on a physical iPhone and Android device through Expo Go.
+- App code lives in `src/`.
+
+## Checks
+
+Run `npm run check` before declaring work done (typecheck, lint, format check, tests). CI runs the same command on every push and pull request.
