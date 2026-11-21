@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Term } from '../content/repository';
 import { gradeAnswer, type GrammarFeature, type QuizItem } from '../engine';
 import { useColors } from '../theme/colors';
-import { QURAN_FONT_FAMILY } from '../theme/quranFont';
+import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { useEventLog } from '../user/UserStoreProvider';
 import { currentNow } from './usePath';
 
@@ -50,6 +50,7 @@ function question(item: QuizItem): string {
  */
 export function QuizScreen({ items, terms, onDone }: Props) {
   const colors = useColors();
+  const size = useQuranTextSize();
   const { record } = useEventLog();
   const [index, setIndex] = useState(0);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -97,11 +98,13 @@ export function QuizScreen({ items, terms, onDone }: Props) {
       <Text style={[styles.question, { color: colors.text }]}>{question(item)}</Text>
 
       {item.type !== 'arabic' ? (
-        <Text style={[styles.word, { color: colors.text }]}>{item.word}</Text>
+        <Text style={[styles.word, size.text(40, 72), { color: colors.text }]}>{item.word}</Text>
       ) : null}
       {item.type === 'grammar' && item.segment !== item.word ? (
         <View style={[styles.segment, { backgroundColor: colors.accentSoft }]}>
-          <Text style={[styles.segmentText, { color: colors.text }]}>{item.segment}</Text>
+          <Text style={[styles.segmentText, size.text(30, 54), { color: colors.text }]}>
+            {item.segment}
+          </Text>
         </View>
       ) : null}
 
@@ -130,7 +133,7 @@ export function QuizScreen({ items, terms, onDone }: Props) {
             >
               <Text
                 style={[
-                  arabicOptions ? styles.optionArabic : styles.optionText,
+                  arabicOptions ? [styles.optionArabic, size.text(28, 50)] : styles.optionText,
                   { color: colors.text },
                 ]}
               >
@@ -170,13 +173,14 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   progress: { fontSize: 13 },
   question: { fontSize: 18, fontWeight: '600' },
-  word: { fontFamily: QURAN_FONT_FAMILY, fontSize: 40, lineHeight: 72, textAlign: 'center' },
+  // Quran text sizes come from the font size setting (useQuranTextSize).
+  word: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'center' },
   segment: { alignSelf: 'center', borderRadius: 8, paddingHorizontal: 16 },
-  segmentText: { fontFamily: QURAN_FONT_FAMILY, fontSize: 30, lineHeight: 54 },
+  segmentText: { fontFamily: QURAN_FONT_FAMILY },
   options: { gap: 10, marginTop: 8 },
   option: { borderWidth: 1.5, borderRadius: 10, padding: 14, alignItems: 'center' },
   optionText: { fontSize: 16, textAlign: 'center' },
-  optionArabic: { fontFamily: QURAN_FONT_FAMILY, fontSize: 28, lineHeight: 50 },
+  optionArabic: { fontFamily: QURAN_FONT_FAMILY },
   optionTerm: { fontSize: 14, marginTop: 2 },
   feedback: { fontSize: 16, fontWeight: '600', marginTop: 4 },
   button: { marginTop: 8, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
