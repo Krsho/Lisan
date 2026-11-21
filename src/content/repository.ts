@@ -63,6 +63,14 @@ export type Segment = {
 
 export type WordDetails = Word & { ref: WordRef; segments: Segment[] };
 
+/** An ayah on the curated path, with the lemmas of each of its words (what the engine plans with). */
+export type PathAyah = {
+  surah: number;
+  ayah: number;
+  /** Every word of the ayah in order, each with its segments' distinct lemmas in segment order. */
+  words: { position: number; lemmas: string[] }[];
+};
+
 type WordRow = { ayah: number; position: number; text: string; bare: string; gloss: string | null };
 /** `terms` holds the ids of the segment's terms, separated by spaces. */
 type SegmentRow = Omit<Segment, 'terms'> & { terms: string };
@@ -167,6 +175,38 @@ export function createContentRepository(db: SqlRunner) {
           ORDER BY a.ayah`,
         [language, language, surah],
       );
+    },
+
+    /** The curated path in study order: Al-Fatiha, then Juz' 'Amma from An-Nas backwards. */
+    async getPath(): Promise<PathAyah[]> {
+      const rows = await db.all<{
+        surah: number;
+        ayah: number;
+        word: number;
+        lemma: string | null;
+      }>(
+        `SELECT p.surah, p.ayah, w.position AS word, s.lemma
+           FROM path p
+           JOIN words w ON w.surah = p.surah AND w.ayah = p.ayah
+           LEFT JOIN segments s ON s.surah = w.surah AND s.ayah = w.ayah AND s.word = w.position
+          ORDER BY p.position, w.position, s.position`,
+        [],
+      );
+      const path: PathAyah[] = [];
+      for (const { surah, ayah, word, lemma } of rows) {
+        let current = path[path.length - 1];
+        if (!current || current.surah !== surah || current.ayah !== ayah) {
+          current = { surah, ayah, words: [] };
+          path.push(current);
+        }
+        let last = current.words[current.words.length - 1];
+        if (!last || last.position !== word) {
+          last = { position: word, lemmas: [] };
+          current.words.push(last);
+        }
+        if (lemma && !last.lemmas.includes(lemma)) last.lemmas.push(lemma);
+      }
+      return path;
     },
 
     async getEditions(): Promise<Edition[]> {

@@ -180,5 +180,44 @@
     "aya_no": 19,
     "aya_text": "۞ إِنَّ ٱلۡإِنسَٰنَ خُلِقَ هَلُوعًا ﰒ",
     "aya_text_emlaey": "إن الإنسان خلق هلوعا"
+  },
+  {
+    "id": 6226,
+    "jozz": 30,
+    "page": 604,
+    "sura_no": 113,
+    "sura_name_en": "Al-Falaq",
+    "sura_name_ar": "الفَلَق",
+    "line_start": 7,
+    "line_end": 7,
+    "aya_no": 1,
+    "aya_text": "قُلۡ أَعُوذُ بِرَبِّ ٱلۡفَلَقِ ﰀ",
+    "aya_text_emlaey": "قل أعوذ برب الفلق"
+  },
+  {
+    "id": 6231,
+    "jozz": 30,
+    "page": 604,
+    "sura_no": 114,
+    "sura_name_en": "An-Nās",
+    "sura_name_ar": "النَّاس",
+    "line_start": 12,
+    "line_end": 12,
+    "aya_no": 1,
+    "aya_text": "قُلۡ أَعُوذُ بِرَبِّ ٱلنَّاسِ ﰀ",
+    "aya_text_emlaey": "قل أعوذ برب الناس"
+  },
+  {
+    "id": 6232,
+    "jozz": 30,
+    "page": 604,
+    "sura_no": 114,
+    "sura_name_en": "An-Nās",
+    "sura_name_ar": "النَّاس",
+    "line_start": 12,
+    "line_end": 12,
+    "aya_no": 2,
+    "aya_text": "مَلِكِ ٱلنَّاسِ ﰁ",
+    "aya_text_emlaey": "ملك الناس"
   }
 ]

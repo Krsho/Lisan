@@ -1,4 +1,4 @@
--- Extract of QuranEnc english_rwwad.sqlite v1.0.21 (Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7, 70:19), rows unmodified.
+-- Extract of QuranEnc english_rwwad.sqlite v1.0.21 (Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7, 70:19, 113:1, 114:1, 114:2), rows unmodified.
 CREATE TABLE "translations" (
 	"id"	INTEGER NOT NULL,
 	"sura"	INTEGER,
@@ -25,3 +25,6 @@ INSERT INTO translations VALUES (188, 2, 181, 'If someone alters the bequest[79]
 INSERT INTO translations VALUES (1236, 9, 1, '[This is] a declaration of disassociation[1] by Allah and His Messenger to those polytheists with whom you have made a treaty.', '[1] This surah, unlike all surahs of the Qur’an, is not preceded by al-basmalah (the usual opening statement).');
 INSERT INTO translations VALUES (1809, 15, 7, 'Why do you not bring us the angels, if you are truthful?”', '');
 INSERT INTO translations VALUES (5394, 70, 19, 'Indeed, man was created impatient:', '');
+INSERT INTO translations VALUES (6226, 113, 1, 'Say, “I seek refuge with the Lord of the daybreak,', '');
+INSERT INTO translations VALUES (6231, 114, 1, 'Say, “I seek refuge with the Lord of mankind,', '');
+INSERT INTO translations VALUES (6232, 114, 2, 'the Sovereign of mankind[1],', '[1] i.e., the King of mankind.');
