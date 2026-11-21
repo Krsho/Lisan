@@ -1,3 +1,4 @@
+import { lemmaCards, retrievability } from './cards';
 import { chronological, type EventDraft, type ReviewEvent, type WordRef } from './events';
 
 /** The moment to plan for, with the learner's UTC offset there, which sets where a day begins. */
@@ -35,7 +36,29 @@ export type Passage = {
 /** A lemma new to the learner, in the word form where the session first meets it. */
 export type NewLemma = { lemmaId: string; wordRef: WordRef };
 
+/** A lemma's card to review today, in the word form the card shows (its ayah is the context). */
+export type ReviewCard = { lemmaId: string; wordRef: WordRef };
+
+/** At most this many cards are reviewed in a session, however many are due. */
+export const REVIEW_LIMIT = 15;
+
+/** After this many days without a session, the next one opens with a recap. */
+export const RECAP_GAP_DAYS = 7;
+
+/** How many of the last studied ayahs a recap shows. */
+export const RECAP_AYAHS = 3;
+
 export type SessionPlan = {
+  /**
+   * The cards to review first, most at risk of being forgotten first: at most REVIEW_LIMIT. Cards
+   * due beyond the limit wait, unannounced, so missed days never show as a backlog.
+   */
+  reviews: ReviewCard[];
+  /**
+   * After a gap of RECAP_GAP_DAYS or more, the last few ayahs studied (the words of them studied),
+   * to read again before the new material. Empty otherwise.
+   */
+  recap: Passage[];
   /** The next stretch of the path, in order. Empty once the path is finished. */
   newMaterial: Passage[];
   /** The lemmas the new material introduces, in order of first appearance. */
@@ -166,7 +189,65 @@ export function planSession(
     (e) => e.kind === 'completed' && localDay(e.timestamp, now.utcOffsetMinutes) === today,
   );
 
-  return { newMaterial, newLemmas, completedToday };
+  return {
+    reviews: dueReviews(log, now),
+    recap: recapFor(path, log, start, now),
+    newMaterial,
+    newLemmas,
+    completedToday,
+  };
+}
+
+/**
+ * The cards due now, lowest retrievability first (a card never reviewed counts as forgotten, and
+ * among equals the longest overdue goes first), capped at REVIEW_LIMIT. "I know this" lemmas are
+ * never reviewed.
+ */
+function dueReviews(log: ReviewEvent[], now: Now): ReviewCard[] {
+  const known = knownLemmas(log);
+  return [...lemmaCards(log).values()]
+    .filter((c) => c.due <= now.time && !known.has(c.lemmaId))
+    .map((card) => ({ card, risk: retrievability(card, now.time) }))
+    .sort(
+      (a, b) =>
+        a.risk - b.risk ||
+        a.card.due - b.card.due ||
+        (a.card.lemmaId < b.card.lemmaId ? -1 : a.card.lemmaId > b.card.lemmaId ? 1 : 0),
+    )
+    .slice(0, REVIEW_LIMIT)
+    .map(({ card }) => ({ lemmaId: card.lemmaId, wordRef: card.wordRef }));
+}
+
+/**
+ * The last RECAP_AYAHS ayahs studied before `start`, if the last session (a completed one, or
+ * answering reviews) was RECAP_GAP_DAYS or more local days ago.
+ */
+function recapFor(
+  path: PathAyah[],
+  log: ReviewEvent[],
+  start: { ayah: number; word: number },
+  now: Now,
+): Passage[] {
+  const sessions = log.filter((e) => e.kind === 'completed' || e.kind === 'review');
+  if (sessions.length === 0) return [];
+  const last = Math.max(...sessions.map((e) => e.timestamp));
+  const gap = localDay(now.time, now.utcOffsetMinutes) - localDay(last, now.utcOffsetMinutes);
+  if (gap < RECAP_GAP_DAYS) return [];
+
+  const studied: Passage[] = [];
+  const through = start.word > 0 ? start.ayah : start.ayah - 1;
+  for (let i = Math.max(0, through - RECAP_AYAHS + 1); i <= through; i++) {
+    const { surah, ayah, words } = path[i];
+    const upTo = i === start.ayah ? start.word : words.length;
+    studied.push({
+      surah,
+      ayah,
+      fromWord: words[0].position,
+      toWord: words[upTo - 1].position,
+      ayahWords: words.length,
+    });
+  }
+  return studied;
 }
 
 /**

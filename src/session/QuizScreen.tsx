@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import type { Term } from '../content/repository';
+import type { Ayah, Term } from '../content/repository';
 import { gradeAnswer, type GrammarFeature, type QuizItem } from '../engine';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
@@ -15,6 +15,15 @@ type Props = {
   /** Glossary terms by key, naming the options of grammar questions. */
   terms: Map<string, Term>;
   onDone: (result: QuizResult) => void;
+  /** What the questions are, e.g. "Review" (shown with the question count). */
+  title?: string;
+  /** The label of the last question's button. */
+  doneLabel?: string;
+  /**
+   * Ayahs by "surah:ayah", to show each question's word in its ayah as context (for review
+   * cards). The word is marked, or left blank when the question asks for it.
+   */
+  context?: Map<string, Ayah>;
 };
 
 const WRONG = '#c0392b';
@@ -45,10 +54,18 @@ function question(item: QuizItem): string {
 }
 
 /**
- * The quiz on today's new words, one question at a time. Each answer is graded by correctness and
- * speed and saved as a review event straight away; the learner never grades themselves.
+ * Questions one at a time: the review of earlier words, or the quiz on today's new words. Each
+ * answer is graded by correctness and speed and saved as a review event straight away; the learner
+ * never grades themselves.
  */
-export function QuizScreen({ items, terms, onDone }: Props) {
+export function QuizScreen({
+  items,
+  terms,
+  onDone,
+  title = 'Question',
+  doneLabel = 'See summary',
+  context,
+}: Props) {
   const colors = useColors();
   const size = useQuranTextSize();
   const { record } = useEventLog();
@@ -86,6 +103,7 @@ export function QuizScreen({ items, terms, onDone }: Props) {
   const label = (option: string) =>
     item.type === 'grammar' ? (terms.get(option)?.name ?? option) : option;
   const arabicOptions = item.type === 'arabic';
+  const ayah = context?.get(`${item.wordRef.surah}:${item.wordRef.ayah}`);
 
   return (
     <ScrollView
@@ -93,8 +111,32 @@ export function QuizScreen({ items, terms, onDone }: Props) {
       contentContainerStyle={styles.content}
     >
       <Text style={[styles.progress, { color: colors.muted }]}>
-        Question {index + 1} of {items.length} · {item.wordRef.surah}:{item.wordRef.ayah}
+        {title} {index + 1} of {items.length} · {item.wordRef.surah}:{item.wordRef.ayah}
       </Text>
+      {ayah ? (
+        <View style={[styles.context, { borderColor: colors.border }]}>
+          {ayah.words.map((word) => {
+            const isTarget = word.position === item.wordRef.word;
+            // Asked for the Arabic word, the ayah shows a gap where it stands until answered.
+            const hidden = isTarget && item.type === 'arabic' && chosen === null;
+            return (
+              <Text
+                key={word.position}
+                style={[
+                  styles.contextWord,
+                  size.text(22, 40),
+                  {
+                    color: isTarget ? colors.text : colors.muted,
+                    backgroundColor: isTarget ? colors.accentSoft : undefined,
+                  },
+                ]}
+              >
+                {hidden ? '  …  ' : word.text}
+              </Text>
+            );
+          })}
+        </View>
+      ) : null}
       <Text style={[styles.question, { color: colors.text }]}>{question(item)}</Text>
 
       {item.type !== 'arabic' ? (
@@ -160,7 +202,7 @@ export function QuizScreen({ items, terms, onDone }: Props) {
             style={[styles.button, { backgroundColor: colors.accent }]}
           >
             <Text style={[styles.buttonText, { color: colors.background }]}>
-              {index + 1 >= items.length ? 'See summary' : 'Next'}
+              {index + 1 >= items.length ? doneLabel : 'Next'}
             </Text>
           </Pressable>
         </>
@@ -173,6 +215,16 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   progress: { fontSize: 13 },
   question: { fontSize: 18, fontWeight: '600' },
+  // The ayah reads right to left, so its words flow from the right edge.
+  context: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 4,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  contextWord: { fontFamily: QURAN_FONT_FAMILY, borderRadius: 6, paddingHorizontal: 2 },
   // Quran text sizes come from the font size setting (useQuranTextSize).
   word: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'center' },
   segment: { alignSelf: 'center', borderRadius: 8, paddingHorizontal: 16 },
