@@ -263,6 +263,35 @@ describe('content build', () => {
     expect(stem.lemmaFrequency).toBe(2);
   });
 
+  it('samples each lemma in the first word where it stands alone, for quiz options', async () => {
+    const content = build();
+
+    const samples = await content.getLemmaSamples('en');
+    const of = (lemma: string) =>
+      samples.find((s) => s.lemmaId.normalize('NFC') === lemma.normalize('NFC'))!;
+
+    // رَبّ stands alone first in 1:2:3 (رَبِّ), then comes with بِ in 113:1 and 114:1.
+    const rabb = of('رَبّ');
+    expect(rabb).toMatchObject({ frequency: 3, partOfSpeech: 'pos.noun' });
+    expect(rabb.sample?.bare.normalize('NFC')).toBe('رَبِّ'.normalize('NFC'));
+    expect(rabb.sample?.gloss).toBe('the Lord');
+    expect(of('عَبَدَ').partOfSpeech).toBe('pos.verb');
+    // رَحِيم only ever comes with the definite article.
+    expect(of('رَحِيم')).toMatchObject({ frequency: 2, partOfSpeech: null, sample: null });
+    expect(samples).toHaveLength(new Set(samples.map((s) => s.lemmaId)).size);
+  });
+
+  it('lists every glossary term in the explanation language', async () => {
+    const content = build();
+
+    const terms = await content.listTerms('en');
+
+    expect(terms.find((t) => t.key === 'aspect.imperfect')).toMatchObject({
+      arabic: 'فعل مضارع',
+      name: expect.any(String),
+    });
+  });
+
   it('splits a word into its segments, each with its grammatical terms', async () => {
     const content = build();
 

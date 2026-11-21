@@ -9,35 +9,62 @@ type EventRow = {
   surah: number | null;
   ayah: number | null;
   word: number | null;
+  rating: number | null;
+  correct: number | null;
+  response_time_ms: number | null;
   timestamp: number;
   device_id: string;
 };
 
-const KINDS = new Set<string>(['learn', 'known', 'known-undone', 'completed']);
+const KINDS = new Set<string>(['learn', 'known', 'known-undone', 'completed', 'review']);
+const RATINGS = new Set([1, 2, 3, 4]);
 
 function toEvent(row: EventRow): ReviewEvent | null {
   // Kinds from a newer app version (synced from another device) are kept in the table but left out.
   if (!KINDS.has(row.kind) || row.surah === null || row.ayah === null || row.word === null)
     return null;
-  return {
+  const base = {
     id: row.id,
-    kind: row.kind,
     lemmaId: row.lemma_id,
     wordRef: { surah: row.surah, ayah: row.ayah, word: row.word },
     timestamp: row.timestamp,
     deviceId: row.device_id,
-  } as ReviewEvent;
+  };
+  if (row.kind === 'review') {
+    if (row.rating === null || !RATINGS.has(row.rating) || row.correct === null) return null;
+    return {
+      ...base,
+      kind: 'review',
+      rating: row.rating,
+      correct: row.correct === 1,
+      responseTimeMs: row.response_time_ms ?? 0,
+    } as ReviewEvent;
+  }
+  return { ...base, kind: row.kind } as ReviewEvent;
 }
 
 function toRow(event: ReviewEvent): SqlValue[] {
   const { id, kind, lemmaId, wordRef, timestamp, deviceId } = event;
-  return [id, kind, lemmaId, wordRef.surah, wordRef.ayah, wordRef.word, timestamp, deviceId];
+  const graded = event.kind === 'review' ? event : null;
+  return [
+    id,
+    kind,
+    lemmaId,
+    wordRef.surah,
+    wordRef.ayah,
+    wordRef.word,
+    graded?.rating ?? null,
+    graded ? (graded.correct ? 1 : 0) : null,
+    graded?.responseTimeMs ?? null,
+    timestamp,
+    deviceId,
+  ];
 }
 
 const INSERT_EVENT = `
   INSERT OR IGNORE INTO review_events
-    (id, kind, lemma_id, surah, ayah, word, timestamp, device_id)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    (id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms, timestamp, device_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 /**
  * The learner's data in the user database: the device id, the append-only event log and
@@ -87,7 +114,8 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     /** The whole log, oldest first. */
     async listEvents(): Promise<ReviewEvent[]> {
       const rows = await db.all<EventRow>(
-        `SELECT id, kind, lemma_id, surah, ayah, word, timestamp, device_id
+        `SELECT id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms,
+                timestamp, device_id
            FROM review_events ORDER BY timestamp, id`,
         [],
       );
