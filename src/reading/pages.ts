@@ -33,6 +33,8 @@ export function studyPages(ayahs: Ayah[], parts: AyahPart[]): StudyPage[] {
 /**
  * A session's passages as study screens, as Browse shows them: one per ayah or part, keeping only
  * the words studied today. `ayahs` are by "surah:ayah"; `parts` are the path's (getPathParts).
+ * When an ayah's part 1 isn't studied today, its translation and tafsir move to the first part
+ * that is.
  */
 export function sessionPages(
   passages: Passage[],
@@ -43,11 +45,28 @@ export function sessionPages(
     const whole = ayahs.get(`${surah}:${ayah}`);
     if (!whole) return [];
     const ayahParts = parts.filter((p) => p.surah === surah && p.ayah === ayah);
-    return studyPages([whole], ayahParts).flatMap((page) => {
+    const pages = studyPages([whole], ayahParts).flatMap((page) => {
       const words = page.words.filter((w) => w.position >= fromWord && w.position <= toWord);
       return words.length > 0 ? [{ ...page, key: `${surah}:${page.key}`, words }] : [];
     });
+    const firstShown = pages[0]?.part?.number ?? 1;
+    return firstShown === 1
+      ? pages
+      : pages.map((page) => ({ ...page, translationPart: firstShown }));
   });
+}
+
+/**
+ * The index of the page holding the translation and tafsir of page `index`'s ayah, if that is
+ * another page: a later part links back to it.
+ */
+export function translationPageOf(pages: readonly StudyPage[], index: number): number | undefined {
+  const { surah, ayah, part, translationPart = 1 } = pages[index];
+  if (!part || part.number === translationPart) return undefined;
+  const found = pages.findIndex(
+    (p) => p.surah === surah && p.ayah === ayah && p.part?.number === translationPart,
+  );
+  return found >= 0 ? found : undefined;
 }
 
 /** The place a page shows, as remembered between visits: its ayah and, for a long ayah, its part. */

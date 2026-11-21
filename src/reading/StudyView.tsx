@@ -33,6 +33,11 @@ export type StudyPassage = {
   words: Word[];
   /** Which part of the ayah this is (1-based); absent when the ayah is shown whole. */
   part?: { number: number; count: number };
+  /**
+   * The part that shows the ayah's translation, tafsir and ayah-wide notes (default 1). A session
+   * that starts partway into an ayah shows them on the first part it shows instead.
+   */
+  translationPart?: number;
 };
 
 type Props = {
@@ -42,8 +47,8 @@ type Props = {
   /** The ayah's linguistic notes; those on words outside this passage are left out. */
   notes: LinguisticNote[];
   playback: AyahPlayback;
-  /** On a later part, opens part 1, where the translation and tafsir are. */
-  onOpenFirstPart?: () => void;
+  /** On a later part, opens the part where the translation and tafsir are. */
+  onOpenTranslationPart?: () => void;
   /** Whether each word's card shows (default true); the recap shows the ayah without them. */
   showWordCards?: boolean;
   /** Extra content on a word's card, e.g. the session's "new" badge and "I know this". */
@@ -67,19 +72,20 @@ export function StudyView({
   translation,
   notes,
   playback,
-  onOpenFirstPart,
+  onOpenTranslationPart,
   showWordCards = true,
   renderWordExtra,
   header,
   footer,
 }: Props) {
-  const { surah, ayah, words, part } = passage;
+  const { surah, ayah, words, part, translationPart = 1 } = passage;
   const colors = useColors();
   const scroll = useRef<ScrollViewInstance>(null);
   const cardsTop = useRef(0);
   const cardTops = useRef(new Map<number, number>());
   const [highlighted, setHighlighted] = useState<number | null>(null);
-  const laterPart = part !== undefined && part.number > 1;
+  // A later part leaves the ayah's translation, tafsir and ayah-wide notes to another part.
+  const laterPart = part !== undefined && part.number !== translationPart;
   const endsAyah = !part || part.number === part.count;
   const positions = new Set(words.map((w) => w.position));
   const shownNotes = notes.filter((note) =>
@@ -111,10 +117,10 @@ export function StudyView({
         <AyahPlayButton ayahRef={{ surah, ayah }} playback={playback} />
       </View>
       {laterPart ? (
-        onOpenFirstPart ? (
-          <Pressable accessibilityRole="link" onPress={onOpenFirstPart} hitSlop={8}>
+        onOpenTranslationPart ? (
+          <Pressable accessibilityRole="link" onPress={onOpenTranslationPart} hitSlop={8}>
             <Text style={[styles.link, { color: colors.accent }]}>
-              Translation and tafsir: part 1
+              Translation and tafsir: part {translationPart}
             </Text>
           </Pressable>
         ) : null

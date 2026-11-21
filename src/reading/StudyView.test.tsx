@@ -141,7 +141,7 @@ it('links a later part back to part 1 for the translation and tafsir', async () 
       translation={translation}
       notes={[]}
       playback={playback}
-      onOpenFirstPart={openFirstPart}
+      onOpenTranslationPart={openFirstPart}
     />,
   );
 
@@ -149,6 +149,21 @@ it('links a later part back to part 1 for the translation and tafsir', async () 
   expect(screen.queryByRole('button', { name: 'Show tafsir' })).toBeNull();
   await fireEvent.press(screen.getByRole('link', { name: 'Translation and tafsir: part 1' }));
   expect(openFirstPart).toHaveBeenCalled();
+});
+
+it('shows the translation and tafsir on a later part that holds them', async () => {
+  await render(
+    <StudyView
+      passage={{ ...whole, words: [words[1]], part: { number: 2, count: 2 }, translationPart: 2 }}
+      translation={translation}
+      notes={[]}
+      playback={playback}
+    />,
+  );
+
+  expect(screen.getByText(translation.translation)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Show tafsir' })).toBeTruthy();
+  expect(screen.queryByRole('link')).toBeNull();
 });
 
 it('can show the ayah without word cards', async () => {

@@ -11,7 +11,6 @@ const light = {
   accent: '#2f6f4e',
   accentSoft: '#e3efe8',
   border: '#e5e5e5',
-  backdrop: 'rgba(0,0,0,0.35)',
 };
 
 export type Colors = typeof light;
@@ -24,7 +23,6 @@ const dark: Colors = {
   accent: '#7fc49d',
   accentSoft: '#21362b',
   border: '#2a2a2a',
-  backdrop: 'rgba(0,0,0,0.6)',
 };
 
 /** The colour scheme in use: the theme setting, or the phone's when it is "system". */

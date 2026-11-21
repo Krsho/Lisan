@@ -1,5 +1,5 @@
 import type { Ayah, AyahPart } from '../content/repository';
-import { placeOf, sessionPages, studyPages } from './pages';
+import { placeOf, sessionPages, studyPages, translationPageOf } from './pages';
 import { pageIndexOf } from './position';
 
 const ayah = (n: number, wordCount: number): Ayah => ({
@@ -41,6 +41,33 @@ it("shows a session's passages one ayah or part a screen, only the parts studied
     ['2:2.3', 13, 8, { number: 3, count: 3 }],
     ['2:3', 1, 2, undefined],
   ]);
+});
+
+it("shows an ayah's translation on the first part studied today when part 1 isn't", () => {
+  const ayahs = new Map([
+    ['2:2', ayah(2, 20)],
+    ['2:3', ayah(3, 20)],
+  ]);
+  const parts = [
+    ...[part(2, 1, 3, 1, 6), part(2, 2, 3, 7, 12), part(2, 3, 3, 13, 20)],
+    ...[part(3, 1, 2, 1, 10), part(3, 2, 2, 11, 20)],
+  ];
+  const pages = sessionPages(
+    [
+      { surah: 2, ayah: 2, fromWord: 7, toWord: 20, ayahWords: 20 },
+      { surah: 2, ayah: 3, fromWord: 1, toWord: 20, ayahWords: 20 },
+    ],
+    ayahs,
+    parts,
+  );
+  expect(pages.map((p) => [p.key, p.translationPart])).toEqual([
+    ['2:2.2', 2],
+    ['2:2.3', 2],
+    ['2:3.1', undefined],
+    ['2:3.2', undefined],
+  ]);
+  // Each later part links to the page holding its ayah's translation; that page links nowhere.
+  expect(pages.map((_, i) => translationPageOf(pages, i))).toEqual([undefined, 0, undefined, 2]);
 });
 
 it('shows an ayah without parts whole, on one screen', () => {

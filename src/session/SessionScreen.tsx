@@ -1,9 +1,9 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
-import { useAsync } from '../async/useAsync';
-import { AyahPlayButton, RecitationCredit, RecitationError } from '../audio/RecitationControls';
+import { useAsync, type AsyncState } from '../async/useAsync';
+import { RecitationCredit, RecitationError } from '../audio/RecitationControls';
 import { audioSource } from '../audio/source';
 import { useAyahPlayback, type AyahPlayback } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
@@ -11,8 +11,7 @@ import type {
   Ayah,
   AyahPart,
   AyahTranslation as AyahTranslationData,
-  Word,
-  WordRef,
+  SurahSummary,
 } from '../content/repository';
 import { currentNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
@@ -26,16 +25,13 @@ import {
   undoKnown,
   type Content,
   type NewLemma,
-  type Passage,
   type QuizItem,
   type SessionPlan,
 } from '../engine';
-import { AyahTranslation } from '../reading/AyahTranslation';
 import { notesFor, useLinguisticNotes, type NotesByAyah } from '../reading/LinguisticNotes';
-import { sessionPages, type StudyPage } from '../reading/pages';
+import { sessionPages, translationPageOf, type StudyPage } from '../reading/pages';
 import { StudyPager } from '../reading/StudyPager';
 import { StudyView } from '../reading/StudyView';
-import { WordDetailSheet } from '../reading/WordDetailSheet';
 import { ReminderOffer } from '../reminder/ReminderOffer';
 import { useColors, type Colors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
@@ -168,8 +164,9 @@ function Session({ content, onDone }: Props & { content: Content }) {
   if (plan.recap.length > 0 && !recapDone) {
     return (
       <Recap
-        passages={plan.recap}
+        pages={sessionPages(plan.recap, loaded.ayahs, loaded.parts)}
         loaded={loaded}
+        notes={notes}
         playback={playback}
         onDone={() => setRecapDone(true)}
       />
@@ -268,23 +265,10 @@ function NewMaterial({
   const colors = useColors();
   const surahs = useSurahs();
   const [index, setIndex] = useState(0);
-  const ayahKeys = [...new Set(pages.map((p) => ayahKey(p.surah, p.ayah)))];
   const extraData = useMemo(
     () => ({ playback, notes, known, finishDisabled, surahs }),
     [playback, notes, known, finishDisabled, surahs],
   );
-
-  const describe = (page: StudyPage) => {
-    const nth = ayahKeys.indexOf(ayahKey(page.surah, page.ayah)) + 1;
-    const progress = `New ayah ${nth} of ${ayahKeys.length}`;
-    const name =
-      surahs.status === 'loaded'
-        ? surahs.data.find((s) => s.surah === page.surah)?.nameEnglish
-        : undefined;
-    const reference = `${name ?? `Surah ${page.surah}`} ${page.ayah}`;
-    const part = page.part ? ` · part ${page.part.number} of ${page.part.count}` : '';
-    return { progress, reference: reference + part };
-  };
 
   return (
     <StudyPager
@@ -294,26 +278,18 @@ function NewMaterial({
       onIndexChange={setIndex}
       extraData={extraData}
       renderPage={(page, i) => {
-        const { surah, ayah, part } = page;
-        const { progress, reference } = describe(page);
-        // Part 1, where the translation and tafsir are, if it is studied today too.
-        const first = part ? pages[i - (part.number - 1)] : undefined;
-        const firstPartToday = first?.surah === surah && first.ayah === ayah;
+        const { surah, ayah } = page;
+        const translationPage = translationPageOf(pages, i);
         return (
           <StudyView
             passage={page}
             translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
             notes={notesFor(notes, surah, ayah)}
             playback={playback}
-            onOpenFirstPart={
-              part && firstPartToday ? () => setIndex(i - (part.number - 1)) : undefined
+            onOpenTranslationPart={
+              translationPage !== undefined ? () => setIndex(translationPage) : undefined
             }
-            header={
-              <View style={styles.progress}>
-                <Text style={[styles.progressText, { color: colors.text }]}>{progress}</Text>
-                <Text style={[styles.reference, { color: colors.muted }]}>{reference}</Text>
-              </View>
-            }
+            header={<PageHeader label="New ayah" pages={pages} page={page} surahs={surahs} />}
             renderWordExtra={(word) => {
               const lemmas = newLemmas.filter(
                 (l) =>
@@ -399,113 +375,130 @@ function NewLemmas({ lemmas, known, onToggleKnown, colors }: NewLemmasProps) {
   });
 }
 
-type PassageWordsProps = { ayah: Ayah; passage: Passage; onPressWord: (word: Word) => void };
-
-/** The ayah word by word, with words outside today's part of it dimmed. */
-function PassageWords({ ayah, passage, onPressWord }: PassageWordsProps) {
-  const colors = useColors();
-  const size = useQuranTextSize();
-  return (
-    <View style={styles.words}>
-      {ayah.words.map((word) => {
-        const inPassage = word.position >= passage.fromWord && word.position <= passage.toWord;
-        return (
-          <Pressable
-            key={word.position}
-            style={[styles.word, { maxWidth: size.width(140), opacity: inPassage ? 1 : 0.35 }]}
-            accessibilityRole="button"
-            accessibilityHint="Shows the word's grammar"
-            onPress={() => onPressWord(word)}
-          >
-            <Text style={[styles.arabic, size.text(30, 56), { color: colors.text }]}>
-              {word.text}
-            </Text>
-            <Text style={[styles.gloss, { color: colors.muted }]}>{word.gloss ?? '—'}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-type PassageViewProps = {
-  passage: Passage;
-  loaded: Loaded;
-  playback: AyahPlayback;
-  onPressWord: (ref: WordRef) => void;
-  /** More to show under the ayah, such as its linguistic notes. */
-  children?: (ayah: Ayah) => ReactNode;
+type PageHeaderProps = {
+  /** What the screens are, e.g. "New ayah": "New ayah 2 of 3". */
+  label: string;
+  pages: StudyPage[];
+  page: StudyPage;
+  surahs: AsyncState<SurahSummary[]>;
 };
 
-/** One ayah of the session: its reference and recitation, its words, and its translation. */
-function PassageView({ passage, loaded, playback, onPressWord, children }: PassageViewProps) {
+/** Above a session screen: which of the session's ayahs it is, and its reference. */
+function PageHeader({ label, pages, page, surahs }: PageHeaderProps) {
   const colors = useColors();
-  const ayah = loaded.ayahs.get(ayahKey(passage.surah, passage.ayah));
-  const translation = loaded.translations.get(ayahKey(passage.surah, passage.ayah));
-  if (!ayah) return null;
+  const ayahKeys = [...new Set(pages.map((p) => ayahKey(p.surah, p.ayah)))];
+  const nth = ayahKeys.indexOf(ayahKey(page.surah, page.ayah)) + 1;
+  const name =
+    surahs.status === 'loaded'
+      ? surahs.data.find((s) => s.surah === page.surah)?.nameEnglish
+      : undefined;
+  const part = page.part ? ` · part ${page.part.number} of ${page.part.count}` : '';
   return (
-    <View style={[styles.ayah, { borderColor: colors.border }]}>
-      <View style={styles.ayahHeader}>
-        <AyahPlayButton ayahRef={{ surah: ayah.surah, ayah: ayah.ayah }} playback={playback} />
-        <Text style={[styles.reference, { color: colors.muted }]}>
-          {passage.surah}:{passage.ayah}
-        </Text>
-      </View>
-      <PassageWords
-        ayah={ayah}
-        passage={passage}
-        onPressWord={(word) =>
-          onPressWord({ surah: ayah.surah, ayah: ayah.ayah, word: word.position })
-        }
-      />
-      {translation ? <AyahTranslation data={translation} /> : null}
-      {children?.(ayah)}
+    <View style={styles.progress}>
+      <Text style={[styles.progressText, { color: colors.text }]}>
+        {label} {nth} of {ayahKeys.length}
+      </Text>
+      <Text style={[styles.reference, { color: colors.muted }]}>
+        {`${name ?? `Surah ${page.surah}`} ${page.ayah}${part}`}
+      </Text>
     </View>
   );
 }
 
 type RecapProps = {
-  passages: Passage[];
+  pages: StudyPage[];
   loaded: Loaded;
+  notes: NotesByAyah;
   playback: AyahPlayback;
   onDone: () => void;
 };
 
-/** After a gap of a week or more: the last few ayahs studied, to read again before going on. */
-function Recap({ passages, loaded, playback, onDone }: RecapProps) {
+/**
+ * After a gap of a week or more: the last few ayahs studied, to read again before going on. Each
+ * shows in the study view without its word cards until the learner asks for the breakdown. It
+ * records nothing.
+ */
+function Recap({ pages, loaded, notes, playback, onDone }: RecapProps) {
   const colors = useColors();
-  const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
+  const surahs = useSurahs();
+  const [index, setIndex] = useState(0);
+  // The pages whose word cards the learner opened.
+  const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
+  const extraData = useMemo(
+    () => ({ playback, notes, surahs, broken }),
+    [playback, notes, surahs, broken],
+  );
+  const toggleBreakdown = (key: string) =>
+    setBroken((open) => {
+      const next = new Set(open);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+
   return (
-    <>
-      <ScrollView
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={styles.content}
-      >
-        <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
-        <Text style={[styles.body, { color: colors.muted }]}>
-          Here are the last ayahs you studied, to pick up where you left off.
-        </Text>
-        <RecitationCredit source={audioSource} />
-        <RecitationError error={playback.error} />
-        {passages.map((passage) => (
-          <PassageView
-            key={ayahKey(passage.surah, passage.ayah)}
-            passage={passage}
-            loaded={loaded}
+    <StudyPager
+      pages={pages}
+      keyOf={(page) => page.key}
+      index={index}
+      onIndexChange={setIndex}
+      extraData={extraData}
+      renderPage={(page, i) => {
+        const { surah, ayah, key } = page;
+        const translationPage = translationPageOf(pages, i);
+        const showBreakdown = broken.has(key);
+        return (
+          <StudyView
+            passage={page}
+            translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
+            // The notes are about the words, so they come with the breakdown.
+            notes={showBreakdown ? notesFor(notes, surah, ayah) : []}
             playback={playback}
-            onPressWord={setSelectedWord}
+            showWordCards={showBreakdown}
+            onOpenTranslationPart={
+              translationPage !== undefined ? () => setIndex(translationPage) : undefined
+            }
+            header={
+              <>
+                {i === 0 ? (
+                  <>
+                    <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
+                    <Text style={[styles.body, { color: colors.muted }]}>
+                      Here are the last ayahs you studied, to pick up where you left off.
+                    </Text>
+                  </>
+                ) : null}
+                <PageHeader label="Recap ayah" pages={pages} page={page} surahs={surahs} />
+              </>
+            }
+            footer={
+              <>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showBreakdown }}
+                  onPress={() => toggleBreakdown(key)}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.toggle, { color: colors.accent }]}>
+                    {showBreakdown ? 'Hide breakdown' : 'Show breakdown'}
+                  </Text>
+                </Pressable>
+                <RecitationCredit source={audioSource} />
+                <RecitationError error={playback.error} />
+                {i === pages.length - 1 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={onDone}
+                    style={[styles.button, { backgroundColor: colors.accent }]}
+                  >
+                    <Text style={[styles.buttonText, { color: colors.background }]}>Continue</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            }
           />
-        ))}
-        <Pressable
-          accessibilityRole="button"
-          onPress={onDone}
-          style={[styles.button, { backgroundColor: colors.accent }]}
-        >
-          <Text style={[styles.buttonText, { color: colors.background }]}>Continue</Text>
-        </Pressable>
-      </ScrollView>
-      <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
-    </>
+        );
+      }}
+    />
   );
 }
 
@@ -568,15 +561,7 @@ function Summary({
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
-  ayah: { paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  ayahHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   reference: { fontSize: 13 },
-  // Arabic reads right to left, so words flow from the right edge.
-  words: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 12, columnGap: 14 },
-  // Quran text sizes come from the font size setting (useQuranTextSize).
-  word: { alignItems: 'center' },
-  arabic: { fontFamily: QURAN_FONT_FAMILY },
-  gloss: { fontSize: 13, textAlign: 'center' },
   progress: { gap: 2 },
   progressText: { fontSize: 16, fontWeight: '700' },
   lemma: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -589,6 +574,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
+  toggle: { fontSize: 14, fontWeight: '600' },
   button: { marginTop: 8, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   buttonText: { fontSize: 16, fontWeight: '700' },
   title: { fontSize: 22, fontWeight: '700' },
