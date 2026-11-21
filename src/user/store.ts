@@ -88,6 +88,7 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
   let deviceId: Promise<string> | null = null;
   // Every write waits for the one before: on one connection, a write made while another's
   // transaction is open would try to open a transaction inside it, or be rolled back with it.
+  // The browse-position read waits too, so it sees places saved without waiting.
   let writes: Promise<unknown> = Promise.resolve();
   function serially<T>(write: () => Promise<T>): Promise<T> {
     const result = writes.then(write);
