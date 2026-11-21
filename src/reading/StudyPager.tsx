@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   FlatList,
   I18nManager,
@@ -23,8 +23,6 @@ type Props<T> = {
   onIndexChange: (index: number) => void;
   /** Keep it stable (useCallback): the pages on screen redraw whenever it changes. */
   renderPage: (page: T, index: number) => ReactNode;
-  /** Changes when pages need to redraw without the pages themselves changing (as for FlatList). */
-  extraData?: unknown;
 };
 
 const layout = pagerLayout(I18nManager.isRTL);
@@ -34,14 +32,7 @@ const layout = pagerLayout(I18nManager.isRTL);
  * to the left) goes to the next one. Next/Previous buttons below do the same; Next sits on the
  * left, the side the next page comes from. The same in every system locale (see pagerLayout).
  */
-export function StudyPager<T>({
-  pages,
-  keyOf,
-  index,
-  onIndexChange,
-  renderPage,
-  extraData,
-}: Props<T>) {
+export function StudyPager<T>({ pages, keyOf, index, onIndexChange, renderPage }: Props<T>) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const list = useRef<FlatList<T>>(null);
@@ -73,8 +64,9 @@ export function StudyPager<T>({
     if (next >= 0 && next < count) onIndexChange(next);
   };
 
-  const renderItem: ListRenderItem<T> = ({ item, index: i }) => (
-    <View style={{ width }}>{renderPage(item, i)}</View>
+  const renderItem = useCallback<ListRenderItem<T>>(
+    ({ item, index: i }) => <Page page={item} index={i} width={width} renderPage={renderPage} />,
+    [width, renderPage],
   );
 
   return (
@@ -89,7 +81,7 @@ export function StudyPager<T>({
           <FlatList
             ref={list}
             data={pages}
-            extraData={extraData}
+            extraData={renderPage}
             keyExtractor={keyOf}
             horizontal
             // Reversed, so the first page is on the right and later pages lie to its left.
@@ -124,6 +116,18 @@ export function StudyPager<T>({
     </View>
   );
 }
+
+type PageProps<T> = {
+  page: T;
+  index: number;
+  width: number;
+  renderPage: (page: T, index: number) => ReactNode;
+};
+
+/** One page, redrawn only when its page, its width or renderPage change. */
+const Page = memo(function Page<T>({ page, index, width, renderPage }: PageProps<T>) {
+  return <View style={{ width }}>{renderPage(page, index)}</View>;
+}) as <T>(props: PageProps<T>) => ReactNode;
 
 type NavButtonProps = { label: string; disabled: boolean; onPress: () => void };
 

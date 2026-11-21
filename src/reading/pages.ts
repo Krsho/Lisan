@@ -6,6 +6,9 @@ import type { StudyPassage } from './StudyView';
 /** One study screen: a whole ayah, or one part of a long one. */
 export type StudyPage = StudyPassage & { key: string };
 
+/** A page's key, for the pager. */
+export const keyOfPage = (page: StudyPage): string => page.key;
+
 /**
  * A surah's ayahs as study screens, one per ayah or, for a long ayah, one per part, in reading
  * order. `parts` are the surah's ayah parts (getSurahParts); ayahs without any are shown whole.

@@ -135,5 +135,8 @@ export function useSurahDownload(
     setStatus('idle');
   }, [source, surah, read]);
 
-  return { state, status, start, cancel, remove };
+  return useMemo(
+    () => ({ state, status, start, cancel, remove }),
+    [state, status, start, cancel, remove],
+  );
 }

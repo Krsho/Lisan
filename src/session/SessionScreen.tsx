@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
@@ -29,7 +29,13 @@ import {
   type SessionPlan,
 } from '../engine';
 import { notesFor, useLinguisticNotes, type NotesByAyah } from '../reading/LinguisticNotes';
-import { sessionHeading, sessionPages, translationPageOf, type StudyPage } from '../reading/pages';
+import {
+  keyOfPage,
+  sessionHeading,
+  sessionPages,
+  translationPageOf,
+  type StudyPage,
+} from '../reading/pages';
 import { StudyPager } from '../reading/StudyPager';
 import { StudyView } from '../reading/StudyView';
 import { ReminderOffer } from '../reminder/ReminderOffer';
@@ -144,6 +150,33 @@ function Session({ content, onDone }: Props & { content: Content }) {
     () => (shown ? sessionPages(plan.newMaterial, shown.ayahs, shown.parts) : []),
     [plan, shown],
   );
+  const endRecap = useCallback(() => setRecapDone(true), []);
+
+  const toggleKnown = useCallback(
+    (lemma: NewLemma) =>
+      record([
+        known.has(lemma.lemmaId)
+          ? undoKnown(lemma.lemmaId, lemma.wordRef, currentNow())
+          : markKnown(lemma.lemmaId, lemma.wordRef, currentNow()),
+      ]).catch((error: unknown) => console.error('Failed to save "I know this"', error)),
+    [record, known],
+  );
+
+  // The session counts as done once the new material is studied, so leaving during the quiz
+  // keeps today's progress; quiz answers are saved one by one as they are given.
+  const finish = useCallback(async () => {
+    setSaving(true);
+    try {
+      const drafts = completeSession(plan, events, currentNow());
+      await record(drafts);
+      setLearnedNow(drafts.filter((d) => d.kind === 'learn').length);
+      // Without the quiz's content (it failed to load) the session goes straight to the summary.
+      setQuiz(quizContent.status === 'loaded' ? planQuiz(plan, events, quizContent.data) : []);
+    } catch (error) {
+      console.error('Failed to save the session', error);
+      setSaving(false);
+    }
+  }, [plan, events, record, quizContent]);
 
   // Review → (recap) → new ayah(s) → quiz → summary.
   if (review === null || ayahsState.status !== 'loaded') {
@@ -177,7 +210,7 @@ function Session({ content, onDone }: Props & { content: Content }) {
         loaded={loaded}
         notes={notes}
         playback={playback}
-        onDone={() => setRecapDone(true)}
+        onDone={endRecap}
       />
     );
   }
@@ -200,29 +233,6 @@ function Session({ content, onDone }: Props & { content: Content }) {
       />
     );
   }
-
-  const toggleKnown = (lemma: NewLemma) =>
-    record([
-      known.has(lemma.lemmaId)
-        ? undoKnown(lemma.lemmaId, lemma.wordRef, currentNow())
-        : markKnown(lemma.lemmaId, lemma.wordRef, currentNow()),
-    ]).catch((error: unknown) => console.error('Failed to save "I know this"', error));
-
-  // The session counts as done once the new material is studied, so leaving during the quiz
-  // keeps today's progress; quiz answers are saved one by one as they are given.
-  const finish = async () => {
-    setSaving(true);
-    try {
-      const drafts = completeSession(plan, events, currentNow());
-      await record(drafts);
-      setLearnedNow(drafts.filter((d) => d.kind === 'learn').length);
-      // Without the quiz's content (it failed to load) the session goes straight to the summary.
-      setQuiz(quizContent.status === 'loaded' ? planQuiz(plan, events, quizContent.data) : []);
-    } catch (error) {
-      console.error('Failed to save the session', error);
-      setSaving(false);
-    }
-  };
 
   const quizNext =
     quizContent.status !== 'failed' && !plan.newLemmas.every((l) => known.has(l.lemmaId));
@@ -277,9 +287,75 @@ function NewMaterial({
   // The recitation stops when the learner leaves its page, or this step of the session.
   const { stop } = playback;
   useEffect(() => stop, [stop, index]);
-  const extraData = useMemo(
-    () => ({ playback, notes, known, finishDisabled, surahs }),
-    [playback, notes, known, finishDisabled, surahs],
+  // Changes, and so redraws the pages, with what they show: not when the learner turns the page.
+  const renderPage = useCallback(
+    (page: StudyPage, i: number) => {
+      const { surah, ayah } = page;
+      const translationPage = translationPageOf(pages, i);
+      return (
+        <StudyView
+          passage={page}
+          translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
+          notes={notesFor(notes, surah, ayah)}
+          playback={playback}
+          onOpenTranslationPart={
+            translationPage !== undefined ? () => setIndex(translationPage) : undefined
+          }
+          header={<PageHeader label="New today" pages={pages} index={i} surahs={surahs} />}
+          renderWordExtra={(word) => {
+            const lemmas = newLemmas.filter(
+              (l) =>
+                l.wordRef.surah === surah &&
+                l.wordRef.ayah === ayah &&
+                l.wordRef.word === word.position,
+            );
+            return lemmas.length > 0 ? (
+              <NewLemmas
+                lemmas={lemmas}
+                known={known}
+                onToggleKnown={onToggleKnown}
+                colors={colors}
+              />
+            ) : null;
+          }}
+          footer={
+            <>
+              <RecitationCredit source={audioSource} />
+              <RecitationError error={playback.error} />
+              {i === pages.length - 1 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={finishDisabled}
+                  onPress={onFinish}
+                  style={[
+                    styles.button,
+                    { backgroundColor: colors.accent, opacity: finishDisabled ? 0.6 : 1 },
+                  ]}
+                >
+                  <Text style={[styles.buttonText, { color: colors.background }]}>
+                    {finishLabel}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          }
+        />
+      );
+    },
+    [
+      pages,
+      loaded,
+      notes,
+      playback,
+      surahs,
+      newLemmas,
+      known,
+      onToggleKnown,
+      colors,
+      finishDisabled,
+      finishLabel,
+      onFinish,
+    ],
   );
 
   if (pages.length === 0) {
@@ -295,63 +371,10 @@ function NewMaterial({
   return (
     <StudyPager
       pages={pages}
-      keyOf={(page) => page.key}
+      keyOf={keyOfPage}
       index={index}
       onIndexChange={setIndex}
-      extraData={extraData}
-      renderPage={(page, i) => {
-        const { surah, ayah } = page;
-        const translationPage = translationPageOf(pages, i);
-        return (
-          <StudyView
-            passage={page}
-            translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
-            notes={notesFor(notes, surah, ayah)}
-            playback={playback}
-            onOpenTranslationPart={
-              translationPage !== undefined ? () => setIndex(translationPage) : undefined
-            }
-            header={<PageHeader label="New today" pages={pages} index={i} surahs={surahs} />}
-            renderWordExtra={(word) => {
-              const lemmas = newLemmas.filter(
-                (l) =>
-                  l.wordRef.surah === surah &&
-                  l.wordRef.ayah === ayah &&
-                  l.wordRef.word === word.position,
-              );
-              return lemmas.length > 0 ? (
-                <NewLemmas
-                  lemmas={lemmas}
-                  known={known}
-                  onToggleKnown={onToggleKnown}
-                  colors={colors}
-                />
-              ) : null;
-            }}
-            footer={
-              <>
-                <RecitationCredit source={audioSource} />
-                <RecitationError error={playback.error} />
-                {i === pages.length - 1 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={finishDisabled}
-                    onPress={onFinish}
-                    style={[
-                      styles.button,
-                      { backgroundColor: colors.accent, opacity: finishDisabled ? 0.6 : 1 },
-                    ]}
-                  >
-                    <Text style={[styles.buttonText, { color: colors.background }]}>
-                      {finishLabel}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </>
-            }
-          />
-        );
-      }}
+      renderPage={renderPage}
     />
   );
 }
@@ -472,16 +495,76 @@ function Recap({ pages, loaded, notes, playback, onDone }: RecapProps) {
   useEffect(() => stop, [stop, index]);
   // The pages whose word cards the learner opened.
   const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
-  const extraData = useMemo(
-    () => ({ playback, notes, surahs, broken }),
-    [playback, notes, surahs, broken],
+  const toggleBreakdown = useCallback(
+    (key: string) =>
+      setBroken((open) => {
+        const next = new Set(open);
+        if (!next.delete(key)) next.add(key);
+        return next;
+      }),
+    [],
   );
-  const toggleBreakdown = (key: string) =>
-    setBroken((open) => {
-      const next = new Set(open);
-      if (!next.delete(key)) next.add(key);
-      return next;
-    });
+
+  // Changes, and so redraws the pages, with what they show: not when the learner turns the page.
+  const renderPage = useCallback(
+    (page: StudyPage, i: number) => {
+      const { surah, ayah, key } = page;
+      const translationPage = translationPageOf(pages, i);
+      const showBreakdown = broken.has(key);
+      return (
+        <StudyView
+          passage={page}
+          translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
+          // The notes are about the words, so they come with the breakdown.
+          notes={showBreakdown ? notesFor(notes, surah, ayah) : []}
+          playback={playback}
+          showWordCards={showBreakdown}
+          onOpenTranslationPart={
+            translationPage !== undefined ? () => setIndex(translationPage) : undefined
+          }
+          header={
+            <>
+              {i === 0 ? (
+                <>
+                  <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
+                  <Text style={[styles.body, { color: colors.muted }]}>
+                    Here are the last ayahs you studied, to pick up where you left off.
+                  </Text>
+                </>
+              ) : null}
+              <PageHeader label="Recap" pages={pages} index={i} surahs={surahs} />
+            </>
+          }
+          footer={
+            <>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showBreakdown }}
+                onPress={() => toggleBreakdown(key)}
+                hitSlop={8}
+              >
+                <Text style={[styles.toggle, { color: colors.accent }]}>
+                  {showBreakdown ? 'Hide breakdown' : 'Show breakdown'}
+                </Text>
+              </Pressable>
+              <RecitationCredit source={audioSource} />
+              <RecitationError error={playback.error} />
+              {i === pages.length - 1 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onDone}
+                  style={[styles.button, { backgroundColor: colors.accent }]}
+                >
+                  <Text style={[styles.buttonText, { color: colors.background }]}>Continue</Text>
+                </Pressable>
+              ) : null}
+            </>
+          }
+        />
+      );
+    },
+    [pages, loaded, notes, playback, surahs, broken, toggleBreakdown, colors, onDone],
+  );
 
   if (pages.length === 0) {
     return (
@@ -495,66 +578,10 @@ function Recap({ pages, loaded, notes, playback, onDone }: RecapProps) {
   return (
     <StudyPager
       pages={pages}
-      keyOf={(page) => page.key}
+      keyOf={keyOfPage}
       index={index}
       onIndexChange={setIndex}
-      extraData={extraData}
-      renderPage={(page, i) => {
-        const { surah, ayah, key } = page;
-        const translationPage = translationPageOf(pages, i);
-        const showBreakdown = broken.has(key);
-        return (
-          <StudyView
-            passage={page}
-            translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
-            // The notes are about the words, so they come with the breakdown.
-            notes={showBreakdown ? notesFor(notes, surah, ayah) : []}
-            playback={playback}
-            showWordCards={showBreakdown}
-            onOpenTranslationPart={
-              translationPage !== undefined ? () => setIndex(translationPage) : undefined
-            }
-            header={
-              <>
-                {i === 0 ? (
-                  <>
-                    <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
-                    <Text style={[styles.body, { color: colors.muted }]}>
-                      Here are the last ayahs you studied, to pick up where you left off.
-                    </Text>
-                  </>
-                ) : null}
-                <PageHeader label="Recap" pages={pages} index={i} surahs={surahs} />
-              </>
-            }
-            footer={
-              <>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: showBreakdown }}
-                  onPress={() => toggleBreakdown(key)}
-                  hitSlop={8}
-                >
-                  <Text style={[styles.toggle, { color: colors.accent }]}>
-                    {showBreakdown ? 'Hide breakdown' : 'Show breakdown'}
-                  </Text>
-                </Pressable>
-                <RecitationCredit source={audioSource} />
-                <RecitationError error={playback.error} />
-                {i === pages.length - 1 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={onDone}
-                    style={[styles.button, { backgroundColor: colors.accent }]}
-                  >
-                    <Text style={[styles.buttonText, { color: colors.background }]}>Continue</Text>
-                  </Pressable>
-                ) : null}
-              </>
-            }
-          />
-        );
-      }}
+      renderPage={renderPage}
     />
   );
 }

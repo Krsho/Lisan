@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
@@ -16,7 +16,7 @@ import { useBrowsePositions, useEventLog } from '../user/UserStoreProvider';
 import { AddToReview } from './AddToReview';
 import { notesFor, useLinguisticNotes } from './LinguisticNotes';
 import { JumpToAyah } from './JumpToAyah';
-import { placeOf, studyPages, type StudyPage } from './pages';
+import { keyOfPage, placeOf, studyPages, type StudyPage } from './pages';
 import { describePosition, pageIndexOf, type Place } from './position';
 import { StudyPager } from './StudyPager';
 import { StudyView, WordCards } from './StudyView';
@@ -90,10 +90,35 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
   const notes = useLinguisticNotes([surah], 'en');
   const { events, record } = useEventLog();
-  // Redraw the pages when playback changes, once the notes load, and when the log changes.
-  const extraData = useMemo(
-    () => ({ playback, notes, events, download }),
-    [playback, notes, events, download],
+  // Changes, and so redraws the pages, when playback changes, once the notes load, and when the
+  // log or the download changes: not when the learner turns the page.
+  const renderPage = useCallback(
+    (page: StudyPage, i: number) => {
+      const { ayah, part } = page;
+      const ayahLemmas = lemmas.get(ayah);
+      const firstPart = !part || part.number === 1;
+      // The ayah's own controls go after its last part.
+      const endsAyah = !part || part.number === part.count;
+      return (
+        <StudyView
+          passage={page}
+          translation={translations.get(ayah) ?? null}
+          notes={notesFor(notes, surah, ayah)}
+          playback={playback}
+          onOpenTranslationPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
+          header={ayah === 1 && firstPart && basmala ? <Basmala words={basmala} /> : null}
+          footer={
+            <>
+              {ayahLemmas && endsAyah ? (
+                <AddToReview ayah={ayahLemmas} events={events} record={record} />
+              ) : null}
+              <RecitationBar source={audioSource} download={download} error={playback.error} />
+            </>
+          }
+        />
+      );
+    },
+    [lemmas, translations, notes, surah, playback, basmala, events, record, download],
   );
   const current = pages[index];
   const place = current ? placeOf(current) : null;
@@ -126,35 +151,10 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
       />
       <StudyPager
         pages={pages}
-        keyOf={(page) => page.key}
+        keyOf={keyOfPage}
         index={index}
         onIndexChange={setIndex}
-        extraData={extraData}
-        renderPage={(page, i) => {
-          const { ayah, part } = page;
-          const ayahLemmas = lemmas.get(ayah);
-          const firstPart = !part || part.number === 1;
-          // The ayah's own controls go after its last part.
-          const endsAyah = !part || part.number === part.count;
-          return (
-            <StudyView
-              passage={page}
-              translation={translations.get(ayah) ?? null}
-              notes={notesFor(notes, surah, ayah)}
-              playback={playback}
-              onOpenTranslationPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
-              header={ayah === 1 && firstPart && basmala ? <Basmala words={basmala} /> : null}
-              footer={
-                <>
-                  {ayahLemmas && endsAyah ? (
-                    <AddToReview ayah={ayahLemmas} events={events} record={record} />
-                  ) : null}
-                  <RecitationBar source={audioSource} download={download} error={playback.error} />
-                </>
-              }
-            />
-          );
-        }}
+        renderPage={renderPage}
       />
     </>
   );
