@@ -113,6 +113,16 @@ describe('user store', () => {
     ]);
   });
 
+  it('keeps a lemma added to review from a browsed ayah', async () => {
+    const store = await openStore();
+    const kursi = { surah: 2, ayah: 255, word: 6 };
+
+    await store.record([{ kind: 'added', lemmaId: 'حَىّ', wordRef: kursi, timestamp: 7 }]);
+
+    const [event] = await store.listEvents();
+    expect(event).toMatchObject({ kind: 'added', lemmaId: 'حَىّ', wordRef: kursi, timestamp: 7 });
+  });
+
   it('records where a session stopped, which has no lemma', async () => {
     const store = await openStore();
 

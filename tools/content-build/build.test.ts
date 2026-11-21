@@ -241,6 +241,22 @@ describe('content build', () => {
     );
   });
 
+  it('lists the lemmas of every word of any surah, on the path or not', async () => {
+    const content = build();
+
+    const baqarah = await content.getSurahLemmas(2);
+
+    // The sample has 2:1, 2:2, 2:4 and 2:181; Al-Baqarah is not on the path.
+    expect(baqarah.map((a) => a.ayah)).toEqual([1, 2, 4, 181]);
+    const [, ayah2] = baqarah;
+    expect(ayah2.surah).toBe(2);
+    // ذَٰلِكَ ٱلْكِتَٰبُ: a suffix without a lemma adds none.
+    expect(ayah2.words.slice(0, 2).map((w) => w.lemmas.map((l) => l.normalize('NFC')))).toEqual([
+      ['ذا', 'ل'].map((l) => l.normalize('NFC')),
+      ['ال', 'كِتاب'].map((l) => l.normalize('NFC')),
+    ]);
+  });
+
   it('gives the Basmala header the words of 1:1, linked to their details there', async () => {
     const content = build();
 

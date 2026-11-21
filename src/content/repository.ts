@@ -71,6 +71,27 @@ export type PathAyah = {
   words: { position: number; lemmas: string[] }[];
 };
 
+type LemmaRow = { surah: number; ayah: number; word: number; lemma: string | null };
+
+/** Rows of (ayah, word, segment lemma), in order, as ayahs with each word's distinct lemmas. */
+function groupLemmas(rows: LemmaRow[]): PathAyah[] {
+  const ayahs: PathAyah[] = [];
+  for (const { surah, ayah, word, lemma } of rows) {
+    let current = ayahs[ayahs.length - 1];
+    if (!current || current.surah !== surah || current.ayah !== ayah) {
+      current = { surah, ayah, words: [] };
+      ayahs.push(current);
+    }
+    let last = current.words[current.words.length - 1];
+    if (!last || last.position !== word) {
+      last = { position: word, lemmas: [] };
+      current.words.push(last);
+    }
+    if (lemma && !last.lemmas.includes(lemma)) last.lemmas.push(lemma);
+  }
+  return ayahs;
+}
+
 /** A lemma as quizzes draw wrong options from it. */
 export type LemmaSample = {
   lemmaId: string;
@@ -213,12 +234,7 @@ export function createContentRepository(db: SqlRunner) {
 
     /** The curated path in study order: Al-Fatiha, then Juz' 'Amma from An-Nas backwards. */
     async getPath(): Promise<PathAyah[]> {
-      const rows = await db.all<{
-        surah: number;
-        ayah: number;
-        word: number;
-        lemma: string | null;
-      }>(
+      const rows = await db.all<LemmaRow>(
         `SELECT p.surah, p.ayah, w.position AS word, s.lemma
            FROM path p
            JOIN words w ON w.surah = p.surah AND w.ayah = p.ayah
@@ -226,21 +242,20 @@ export function createContentRepository(db: SqlRunner) {
           ORDER BY p.position, w.position, s.position`,
         [],
       );
-      const path: PathAyah[] = [];
-      for (const { surah, ayah, word, lemma } of rows) {
-        let current = path[path.length - 1];
-        if (!current || current.surah !== surah || current.ayah !== ayah) {
-          current = { surah, ayah, words: [] };
-          path.push(current);
-        }
-        let last = current.words[current.words.length - 1];
-        if (!last || last.position !== word) {
-          last = { position: word, lemmas: [] };
-          current.words.push(last);
-        }
-        if (lemma && !last.lemmas.includes(lemma)) last.lemmas.push(lemma);
-      }
-      return path;
+      return groupLemmas(rows);
+    },
+
+    /** Every ayah of a surah with the lemmas of each of its words, for adding one to review. */
+    async getSurahLemmas(surah: number): Promise<PathAyah[]> {
+      const rows = await db.all<LemmaRow>(
+        `SELECT w.surah, w.ayah, w.position AS word, s.lemma
+           FROM words w
+           LEFT JOIN segments s ON s.surah = w.surah AND s.ayah = w.ayah AND s.word = w.position
+          WHERE w.surah = ?
+          ORDER BY w.ayah, w.position, s.position`,
+        [surah],
+      );
+      return groupLemmas(rows);
     },
 
     /**
