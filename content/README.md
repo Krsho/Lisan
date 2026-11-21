@@ -17,7 +17,19 @@ Bump `CONTENT_VERSION` in `src/content/version.ts` whenever the generated databa
 | `quran-morphology.txt`          | [mustafa0x/quran-morphology](https://github.com/mustafa0x/quran-morphology), a corrected [Quranic Arabic Corpus](https://corpus.quran.com) v0.4 | GNU GPL; credit and link corpus.quran.com. Permission for app use to be confirmed with the corpus maintainer before release                                  |
 | `qul-english-word-by-word.json` | [QUL](https://qul.tarteel.ai) "English Word by Word Translation" (Tarteel). **Manual download, needs a QUL account**                            | No license stated. **Written permission from Tarteel required before release**                                                                               |
 
+| `quranenc/english_rwwad.sqlite` + `.meta.json` | [QuranEnc](https://quranenc.com/en/browse/english_rwwad) English translation, Rowwad Translation Center (QuranEnc's bulk SQLite), fetched by `content:fetch` with its version from QuranEnc's API | QuranEnc terms: no modification, name QuranEnc.com and the publisher, show the version, keep to the latest version |
+| `quranenc/english_mokhtasar.json` + `.meta.json` | [QuranEnc](https://quranenc.com) Al-Mukhtasar in Interpreting the Noble Quran, English (Tafsir Center for Quranic Studies): the 114 per-surah API responses' rows, concatenated, fetched by `content:fetch` | As above. **QuranEnc exposes no version for it** (it is unlisted), so the meta file records `version: null`, the fetch date and the sha256 of the stored file. Ask QuranEnc for the version before release |
+
 To get the QUL file: sign in at [qul.tarteel.ai](https://qul.tarteel.ai), open the [English Word by Word Translation](https://qul.tarteel.ai/resources/translation/92) resource, choose **Download json**, and save it as `content/sources/qul-english-word-by-word.json`.
+
+## Translation and tafsir
+
+Both are stored and shown exactly as QuranEnc publishes them, keyed by language (`ayah_texts` and `editions` tables). Two consequences:
+
+- Rowwad's translator footnotes are kept: `[n]` markers stay in the translation and the `[n] note` entries are shown below it. (QuranEnc's SQLite has an empty string where the API has `null`; both are stored as `NULL`.)
+- Every Mukhtasar entry starts with its ayah number, e.g. `"2. All praise belongs…"`. This prefix is **kept, not stripped**: it is part of QuranEnc's text, and it carries information. Where the Mukhtasar explains several ayahs together it reads `"12-13. …"` on each of them, and it exposes source errors: 86 ayahs carry a number other than their own. Most are grouped or repeated verses (26:68 reuses the note for the identical 26:104), but some look wrong, e.g. 2:3 holds the text for 2:4. Report these to QuranEnc (their terms ask for notes on the translation) rather than fixing them here.
+
+The attribution screen reads each edition's title, link and version from the database.
 
 ## Glossary
 
