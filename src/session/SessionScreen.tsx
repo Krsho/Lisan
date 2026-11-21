@@ -15,11 +15,13 @@ import {
   knownLemmas,
   learnedLemmas,
   markKnown,
+  planQuiz,
   planSession,
   undoKnown,
   type Content,
   type NewLemma,
   type Passage,
+  type QuizItem,
   type SessionPlan,
 } from '../engine';
 import { AyahTranslation } from '../reading/AyahTranslation';
@@ -28,11 +30,13 @@ import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY } from '../theme/quranFont';
 import { useEventLog } from '../user/UserStoreProvider';
 import { describePassages } from './describe';
+import { QuizScreen, type QuizResult } from './QuizScreen';
+import { useQuizContent } from './useQuizContent';
 import { currentNow, usePath } from './usePath';
 
 type Props = { onDone: () => void };
 
-/** Today's session: study the new ayah(s), then a summary. */
+/** Today's session: study the new ayah(s), a quiz on their new words, then a summary. */
 export function SessionScreen({ onDone }: Props) {
   const colors = useColors();
   const path = usePath();
@@ -71,7 +75,12 @@ function Session({ content, onDone }: Props & { content: Content }) {
   const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
   const [learnedNow, setLearnedNow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  // Null until the new material is studied; then the questions, or empty if there are none.
+  const [quiz, setQuiz] = useState<QuizItem[] | null>(null);
+  const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
   const known = useMemo(() => knownLemmas(events), [events]);
+  // Loaded while the learner studies, so the quiz is ready when they finish.
+  const quizContent = useQuizContent(plan.newLemmas);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,8 +110,16 @@ function Session({ content, onDone }: Props & { content: Content }) {
     };
   }, [repository, plan]);
 
-  if (learnedNow !== null) {
-    return <Summary content={content} learnedNow={learnedNow} onDone={onDone} />;
+  if (learnedNow !== null && quiz !== null && quiz.length > 0 && quizResult === null) {
+    return quizContent.status === 'loaded' ? (
+      <QuizScreen items={quiz} terms={quizContent.data.terms} onDone={setQuizResult} />
+    ) : null;
+  }
+
+  if (learnedNow !== null && quiz !== null) {
+    return (
+      <Summary content={content} learnedNow={learnedNow} quizResult={quizResult} onDone={onDone} />
+    );
   }
 
   if (!loaded) {
@@ -135,12 +152,16 @@ function Session({ content, onDone }: Props & { content: Content }) {
         : markKnown(lemma.lemmaId, lemma.wordRef, currentNow()),
     ]).catch((error: unknown) => console.error('Failed to save "I know this"', error));
 
+  // The session counts as done once the new material is studied, so leaving during the quiz
+  // keeps today's progress; quiz answers are saved one by one as they are given.
   const finish = async () => {
     setSaving(true);
     try {
       const drafts = completeSession(plan, events, currentNow());
       await record(drafts);
       setLearnedNow(drafts.filter((d) => d.kind === 'learn').length);
+      // Without the quiz's content (it failed to load) the session goes straight to the summary.
+      setQuiz(quizContent.status === 'loaded' ? planQuiz(plan, events, quizContent.data) : []);
     } catch (error) {
       console.error('Failed to save the session', error);
       setSaving(false);
@@ -217,11 +238,21 @@ function Session({ content, onDone }: Props & { content: Content }) {
 
         <Pressable
           accessibilityRole="button"
-          disabled={saving}
+          disabled={saving || quizContent.status === 'loading'}
           onPress={finish}
-          style={[styles.button, { backgroundColor: colors.accent, opacity: saving ? 0.6 : 1 }]}
+          style={[
+            styles.button,
+            {
+              backgroundColor: colors.accent,
+              opacity: saving || quizContent.status === 'loading' ? 0.6 : 1,
+            },
+          ]}
         >
-          <Text style={[styles.buttonText, { color: colors.background }]}>Finish session</Text>
+          <Text style={[styles.buttonText, { color: colors.background }]}>
+            {quizContent.status === 'failed' || plan.newLemmas.every((l) => known.has(l.lemmaId))
+              ? 'Finish session'
+              : 'Continue to the quiz'}
+          </Text>
         </Pressable>
       </ScrollView>
       <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
@@ -258,10 +289,12 @@ function PassageWords({ ayah, passage, onPressWord }: PassageWordsProps) {
 function Summary({
   content,
   learnedNow,
+  quizResult,
   onDone,
 }: {
   content: Content;
   learnedNow: number;
+  quizResult: QuizResult | null;
   onDone: () => void;
 }) {
   const colors = useColors();
@@ -280,6 +313,11 @@ function Summary({
     >
       <Text style={[styles.title, { color: colors.text }]}>Session complete</Text>
       <Text style={[styles.body, { color: colors.text }]}>New words today: {learnedNow}</Text>
+      {quizResult ? (
+        <Text style={[styles.body, { color: colors.text }]}>
+          Quiz: {quizResult.correct} of {quizResult.total} right
+        </Text>
+      ) : null}
       <Text style={[styles.body, { color: colors.text }]}>Words learned in all: {total}</Text>
       <Text style={[styles.body, { color: colors.muted }]}>
         {next.newMaterial.length === 0
