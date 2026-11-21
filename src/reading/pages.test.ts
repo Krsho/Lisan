@@ -1,5 +1,5 @@
 import type { Ayah, AyahPart } from '../content/repository';
-import { placeOf, sessionPages, studyPages, translationPageOf } from './pages';
+import { placeOf, sessionHeading, sessionPages, studyPages, translationPageOf } from './pages';
 import { pageIndexOf } from './position';
 
 const ayah = (n: number, wordCount: number): Ayah => ({
@@ -105,4 +105,36 @@ it('resumes on the part of a long ayah the learner was on', () => {
   const saved = placeOf(pages[2]);
   expect(pageIndexOf(places, saved)).toBe(2);
   expect(pages[pageIndexOf(places, saved)].key).toBe('2.2');
+});
+
+describe("a session screen's heading", () => {
+  const ayahs = new Map([['2:282', ayah(282, 40)]]);
+  const parts = [part(282, 3, 5, 1, 20), part(282, 4, 5, 21, 30), part(282, 5, 5, 31, 40)];
+  const pages = sessionPages(
+    [{ surah: 2, ayah: 282, fromWord: 1, toWord: 40, ayahWords: 40 }],
+    ayahs,
+    parts,
+  );
+  const baqarah = {
+    surah: 2,
+    nameEnglish: 'Al-Baqarah',
+    nameArabic: '',
+    ayahCount: 286,
+    hasBasmala: true,
+  };
+
+  it('counts the screens, not the ayahs, so the parts of one ayah move on', () => {
+    expect(sessionHeading('New today', pages, 0, [baqarah]).progress).toBe('New today · 1 of 3');
+    expect(sessionHeading('New today', pages, 2, [baqarah]).progress).toBe('New today · 3 of 3');
+  });
+
+  it("gives the screen's place in its surah", () => {
+    expect(sessionHeading('New today', pages, 1, [baqarah]).reference).toBe(
+      'Al-Baqarah · 282 / 286 · part 4 of 5',
+    );
+  });
+
+  it('names the surah by number until the surah names load', () => {
+    expect(sessionHeading('Recap', pages, 0, null).reference).toBe('Surah 2 · 282 · part 3 of 5');
+  });
 });

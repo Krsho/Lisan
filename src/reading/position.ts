@@ -1,11 +1,14 @@
-/** Where a study screen is in its surah, for the header: "Al-Baqarah · 5 / 286 · part 2 of 5". */
+/**
+ * Where a study screen is in its surah, for the header: "Al-Baqarah · 5 / 286 · part 2 of 5";
+ * without the ayah count when it isn't known.
+ */
 export function describePosition(
   surahName: string,
   ayah: number,
-  ayahCount: number,
+  ayahCount: number | undefined,
   part?: { number: number; count: number },
 ): string {
-  const position = `${surahName} · ${ayah} / ${ayahCount}`;
+  const position = `${surahName} · ${ayah}${ayahCount === undefined ? '' : ` / ${ayahCount}`}`;
   return part ? `${position} · part ${part.number} of ${part.count}` : position;
 }
 

@@ -29,7 +29,7 @@ import {
   type SessionPlan,
 } from '../engine';
 import { notesFor, useLinguisticNotes, type NotesByAyah } from '../reading/LinguisticNotes';
-import { sessionPages, translationPageOf, type StudyPage } from '../reading/pages';
+import { sessionHeading, sessionPages, translationPageOf, type StudyPage } from '../reading/pages';
 import { StudyPager } from '../reading/StudyPager';
 import { StudyView } from '../reading/StudyView';
 import { ReminderOffer } from '../reminder/ReminderOffer';
@@ -292,7 +292,7 @@ function NewMaterial({
             onOpenTranslationPart={
               translationPage !== undefined ? () => setIndex(translationPage) : undefined
             }
-            header={<PageHeader label="New ayah" pages={pages} page={page} surahs={surahs} />}
+            header={<PageHeader label="New today" pages={pages} index={i} surahs={surahs} />}
             renderWordExtra={(word) => {
               const lemmas = newLemmas.filter(
                 (l) =>
@@ -379,31 +379,26 @@ function NewLemmas({ lemmas, known, onToggleKnown, colors }: NewLemmasProps) {
 }
 
 type PageHeaderProps = {
-  /** What the screens are, e.g. "New ayah": "New ayah 2 of 3". */
+  /** What the screens are, e.g. "New today": "New today · 2 of 3". */
   label: string;
   pages: StudyPage[];
-  page: StudyPage;
+  index: number;
   surahs: AsyncState<SurahSummary[]>;
 };
 
-/** Above a session screen: which of the session's ayahs it is, and its reference. */
-function PageHeader({ label, pages, page, surahs }: PageHeaderProps) {
+/** Above a session screen: which of the session's screens it is, and its place in its surah. */
+function PageHeader({ label, pages, index, surahs }: PageHeaderProps) {
   const colors = useColors();
-  const ayahKeys = [...new Set(pages.map((p) => ayahKey(p.surah, p.ayah)))];
-  const nth = ayahKeys.indexOf(ayahKey(page.surah, page.ayah)) + 1;
-  const name =
-    surahs.status === 'loaded'
-      ? surahs.data.find((s) => s.surah === page.surah)?.nameEnglish
-      : undefined;
-  const part = page.part ? ` · part ${page.part.number} of ${page.part.count}` : '';
+  const { progress, reference } = sessionHeading(
+    label,
+    pages,
+    index,
+    surahs.status === 'loaded' ? surahs.data : null,
+  );
   return (
     <View style={styles.progress}>
-      <Text style={[styles.progressText, { color: colors.text }]}>
-        {label} {nth} of {ayahKeys.length}
-      </Text>
-      <Text style={[styles.reference, { color: colors.muted }]}>
-        {`${name ?? `Surah ${page.surah}`} ${page.ayah}${part}`}
-      </Text>
+      <Text style={[styles.progressText, { color: colors.text }]}>{progress}</Text>
+      <Text style={[styles.reference, { color: colors.muted }]}>{reference}</Text>
     </View>
   );
 }
@@ -473,7 +468,7 @@ function Recap({ pages, loaded, notes, playback, onDone }: RecapProps) {
                     </Text>
                   </>
                 ) : null}
-                <PageHeader label="Recap ayah" pages={pages} page={page} surahs={surahs} />
+                <PageHeader label="Recap" pages={pages} index={i} surahs={surahs} />
               </>
             }
             footer={

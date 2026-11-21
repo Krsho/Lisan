@@ -1,6 +1,6 @@
-import type { Ayah, AyahPart } from '../content/repository';
+import type { Ayah, AyahPart, SurahSummary } from '../content/repository';
 import type { Passage } from '../engine';
-import type { Place } from './position';
+import { describePosition, type Place } from './position';
 import type { StudyPassage } from './StudyView';
 
 /** One study screen: a whole ayah, or one part of a long one. */
@@ -67,6 +67,30 @@ export function translationPageOf(pages: readonly StudyPage[], index: number): n
     (p) => p.surah === surah && p.ayah === ayah && p.part?.number === translationPart,
   );
   return found >= 0 ? found : undefined;
+}
+
+/**
+ * What heads a session screen: how far through the session's screens it is ("New today · 2 of 3",
+ * counting each part of a long ayah), and where it is in its surah. `surahs` are null until the
+ * surah names load.
+ */
+export function sessionHeading(
+  label: string,
+  pages: readonly StudyPage[],
+  index: number,
+  surahs: readonly SurahSummary[] | null,
+): { progress: string; reference: string } {
+  const { surah, ayah, part } = pages[index];
+  const summary = surahs?.find((s) => s.surah === surah);
+  return {
+    progress: `${label} · ${index + 1} of ${pages.length}`,
+    reference: describePosition(
+      summary?.nameEnglish ?? `Surah ${surah}`,
+      ayah,
+      summary?.ayahCount,
+      part,
+    ),
+  };
 }
 
 /** The place a page shows, as remembered between visits: its ayah and, for a long ayah, its part. */

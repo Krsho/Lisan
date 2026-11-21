@@ -10,6 +10,12 @@ it('adds the part of a long ayah', () => {
   );
 });
 
+it('leaves out the count when it is not known', () => {
+  expect(describePosition('Surah 2', 282, undefined, { number: 2, count: 5 })).toBe(
+    'Surah 2 · 282 · part 2 of 5',
+  );
+});
+
 describe('the page showing a place', () => {
   const pages = [{ ayah: 1 }, { ayah: 2, part: 1 }, { ayah: 2, part: 2 }, { ayah: 3 }];
 
