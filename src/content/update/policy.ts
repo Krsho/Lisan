@@ -40,14 +40,19 @@ export function parseManifest(value: unknown): ContentManifest | null {
 }
 
 /**
- * Whether to download the manifest's database: it must be newer than the one open, and in a
- * table layout this app build reads. A newer schema waits for an app update that supports it.
+ * Whether to download the manifest's database: it must be newer than the one open, in a table
+ * layout this app build reads, and not one that was installed before but would not open. A newer
+ * schema waits for an app update that supports it.
  */
 export const isUpdateWanted = (
   manifest: ContentManifest,
   activeVersion: number,
   supportedSchema: number,
-) => manifest.version > activeVersion && manifest.schema === supportedSchema;
+  state: UpdateState,
+) =>
+  manifest.version > activeVersion &&
+  manifest.schema === supportedSchema &&
+  !(state.rejected ?? []).includes(manifest.version);
 
 /** How often the app looks for new content. */
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -68,7 +73,18 @@ export type UpdateState = {
   active: number | null;
   /** When the manifest was last checked (ms since epoch). */
   checkedAt: number | null;
+  /** Versions that were verified and installed but would not open, so are not downloaded again. */
+  rejected?: number[];
 };
+
+/** The state once the downloaded `version` would not open: back to the bundled database. */
+export function rejectContentVersion(state: UpdateState, version: number): UpdateState {
+  return {
+    ...state,
+    active: state.active === version ? null : state.active,
+    rejected: [...new Set([...(state.rejected ?? []), version])],
+  };
+}
 
 /** Reads the state file. A missing or damaged file means nothing was downloaded. */
 export function parseUpdateState(text: string | null): UpdateState {
@@ -79,10 +95,12 @@ export function parseUpdateState(text: string | null): UpdateState {
     value = null;
   }
   if (typeof value !== 'object' || value === null) return { active: null, checkedAt: null };
-  const { active, checkedAt } = value as Record<string, unknown>;
+  const { active, checkedAt, rejected } = value as Record<string, unknown>;
+  const rejectedVersions = Array.isArray(rejected) ? rejected.filter(isPositiveInteger) : [];
   return {
     active: isPositiveInteger(active) ? active : null,
     checkedAt: typeof checkedAt === 'number' && Number.isFinite(checkedAt) ? checkedAt : null,
+    ...(rejectedVersions.length > 0 ? { rejected: rejectedVersions } : {}),
   };
 }
 
@@ -114,9 +132,13 @@ export function chooseActiveContent(
   };
 }
 
-const CONTENT_FILE = /^(content-v\d+\.db)(-wal|-shm|-journal|\.part)?$/;
+// A database, its side files, a partial download, and the partial's side files (left by probe).
+const CONTENT_FILE = /^(content-v\d+\.db)(\.part)?(-wal|-shm|-journal)?$/;
 
-/** Content databases (and their side files or partial downloads) other than the open one. */
+/**
+ * Content databases (and their side files) other than the open one, and partial downloads with
+ * their side files.
+ */
 export function staleContentFiles(fileNames: string[], activeDatabaseName: string): string[] {
   return fileNames.filter((name) => {
     const match = CONTENT_FILE.exec(name);

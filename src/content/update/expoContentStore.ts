@@ -80,6 +80,8 @@ export const expoContentStore: ContentStore = {
     await File.downloadFileAsync(url, partFile(databaseName), { idempotent: true });
   },
 
+  size: async (databaseName) => partFile(databaseName).size,
+
   sha256: (databaseName) => partFile(databaseName).digest('SHA-256'),
 
   async probe(databaseName) {
