@@ -11,13 +11,13 @@ import type {
 import { useSurahs } from '../content/useSurahs';
 import {
   completeSession,
-  DEFAULT_SETTINGS,
   knownLemmas,
-  learnedLemmas,
   markKnown,
   planQuiz,
+  progress,
   planReview,
   planSession,
+  streak,
   undoKnown,
   type Content,
   type NewLemma,
@@ -30,8 +30,9 @@ import { LinguisticNotes, notesFor, useLinguisticNotes } from '../reading/Lingui
 import { WordDetailSheet } from '../reading/WordDetailSheet';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
+import { useSettings } from '../settings/SettingsContext';
 import { useEventLog } from '../user/UserStoreProvider';
-import { describePassages } from './describe';
+import { describePassages, describeStreak } from './describe';
 import { QuizScreen, type QuizResult } from './QuizScreen';
 import { useQuizContent } from './useQuizContent';
 import { currentNow, usePath } from './usePath';
@@ -72,10 +73,9 @@ function Session({ content, onDone }: Props & { content: Content }) {
   const colors = useColors();
   const size = useQuranTextSize();
   const { events, record } = useEventLog();
+  const { pace } = useSettings();
   // Planned once: marking "I know this" during the session doesn't change what is studied today.
-  const [plan] = useState<SessionPlan>(() =>
-    planSession(content, events, DEFAULT_SETTINGS, currentNow()),
-  );
+  const [plan] = useState<SessionPlan>(() => planSession(content, events, { pace }, currentNow()));
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [failed, setFailed] = useState(false);
   const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
@@ -407,12 +407,14 @@ function Summary({
 }) {
   const colors = useColors();
   const { events } = useEventLog();
+  const { pace } = useSettings();
   const surahs = useSurahs();
   const next = useMemo(
-    () => planSession(content, events, DEFAULT_SETTINGS, currentNow()),
-    [content, events],
+    () => planSession(content, events, { pace }, currentNow()),
+    [content, events, pace],
   );
-  const total = useMemo(() => learnedLemmas(events).size, [events]);
+  const total = useMemo(() => progress(content, events).wordsLearned, [content, events]);
+  const days = useMemo(() => streak(events, currentNow()), [events]);
 
   return (
     <ScrollView
@@ -432,6 +434,7 @@ function Summary({
         </Text>
       ) : null}
       <Text style={[styles.body, { color: colors.text }]}>Words learned in all: {total}</Text>
+      <Text style={[styles.body, { color: colors.text }]}>Streak: {describeStreak(days)}</Text>
       <Text style={[styles.body, { color: colors.muted }]}>
         {next.newMaterial.length === 0
           ? 'You have finished the path.'

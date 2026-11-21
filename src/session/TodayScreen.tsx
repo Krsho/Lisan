@@ -2,16 +2,17 @@ import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { useSurahs } from '../content/useSurahs';
-import { DEFAULT_SETTINGS, learnedLemmas, planSession, type Content } from '../engine';
+import { planSession, progress, streak, type Content } from '../engine';
+import { useSettings } from '../settings/SettingsContext';
 import { useColors } from '../theme/colors';
 import { useEventLog } from '../user/UserStoreProvider';
-import { describePassages } from './describe';
+import { describePassages, describeStreak } from './describe';
 import { currentNow, usePath } from './usePath';
 
-type Props = { onStart: () => void; onBrowse: () => void };
+type Props = { onStart: () => void; onBrowse: () => void; onProgress: () => void };
 
 /** Home: today's session, and the way into browsing the whole Quran. */
-export function TodayScreen({ onStart, onBrowse }: Props) {
+export function TodayScreen(props: Props) {
   const colors = useColors();
   const path = usePath();
 
@@ -26,18 +27,20 @@ export function TodayScreen({ onStart, onBrowse }: Props) {
       </View>
     );
   }
-  return <Today content={path.content} onStart={onStart} onBrowse={onBrowse} />;
+  return <Today content={path.content} {...props} />;
 }
 
-function Today({ content, onStart, onBrowse }: Props & { content: Content }) {
+function Today({ content, onStart, onBrowse, onProgress }: Props & { content: Content }) {
   const colors = useColors();
   const { events } = useEventLog();
+  const { pace } = useSettings();
   const surahs = useSurahs();
   const plan = useMemo(
-    () => planSession(content, events, DEFAULT_SETTINGS, currentNow()),
-    [content, events],
+    () => planSession(content, events, { pace }, currentNow()),
+    [content, events, pace],
   );
-  const learned = useMemo(() => learnedLemmas(events).size, [events]);
+  const learned = useMemo(() => progress(content, events).wordsLearned, [content, events]);
+  const days = useMemo(() => streak(events, currentNow()), [events]);
   const next =
     surahs.status === 'loaded' ? describePassages(plan.newMaterial, surahs.surahs) : null;
   const finished = plan.newMaterial.length === 0;
@@ -94,7 +97,18 @@ function Today({ content, onStart, onBrowse }: Props & { content: Content }) {
         )}
       </View>
 
-      <Text style={[styles.body, { color: colors.muted }]}>Words learned: {learned}</Text>
+      {/* Quiet on purpose: a line of text, no badges or flames. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityHint="Shows your progress along the path"
+        onPress={onProgress}
+        hitSlop={8}
+      >
+        <Text style={[styles.body, { color: colors.muted }]}>
+          Streak: {describeStreak(days)} · Words learned: {learned}
+        </Text>
+        <Text style={[styles.link, { color: colors.accent }]}>Your progress</Text>
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"

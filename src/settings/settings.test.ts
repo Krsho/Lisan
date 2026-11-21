@@ -8,12 +8,14 @@ import {
 } from './settings';
 
 describe('reading settings', () => {
-  it('defaults to the system theme, normal size, translation shown and tafsir hidden', () => {
+  it('defaults to the system theme, normal size, translation shown, tafsir hidden, normal pace', () => {
     expect(parseSettings([])).toEqual({
       theme: 'system',
       arabicFontScale: 1,
       showTranslation: true,
       showTafsir: false,
+      pace: 'normal',
+      onboarded: false,
     });
   });
 
@@ -23,6 +25,8 @@ describe('reading settings', () => {
       arabicFontScale: 1.3,
       showTranslation: false,
       showTafsir: true,
+      pace: 'intense',
+      onboarded: true,
     };
 
     expect(parseSettings(serializeSettings(stored as typeof DEFAULT_READING_SETTINGS))).toEqual(
@@ -36,6 +40,8 @@ describe('reading settings', () => {
       { key: 'showTafsir', value: 'not json' },
       { key: 'showTranslation', value: '"yes"' },
       { key: 'arabicFontScale', value: '1.15' },
+      { key: 'pace', value: '"frantic"' },
+      { key: 'onboarded', value: '1' },
     ]);
 
     expect(settings).toEqual({ ...DEFAULT_READING_SETTINGS, arabicFontScale: 1.15 });

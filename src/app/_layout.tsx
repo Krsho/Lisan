@@ -58,6 +58,7 @@ function AppStack() {
         <Stack.Screen name="index" options={{ title: 'Lisan' }} />
         <Stack.Screen name="session" options={{ title: 'Today' }} />
         <Stack.Screen name="browse" options={{ title: 'Browse' }} />
+        <Stack.Screen name="progress" options={{ title: 'Your progress' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="about" options={{ title: 'About and sources' }} />
       </Stack>

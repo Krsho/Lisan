@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
+import { NEW_LEMMA_BUDGET, type Pace } from '../engine';
 import { useColors, type Colors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
+import { PACE_LABELS } from './pace';
 import { useSettings, useUpdateSettings } from './SettingsContext';
 import { ARABIC_FONT_SCALES, stepFontScale, type ThemePreference } from './settings';
 
@@ -12,9 +14,11 @@ const THEMES: { value: ThemePreference; label: string }[] = [
   { value: 'dark', label: 'Dark' },
 ];
 
+const PACES = Object.keys(NEW_LEMMA_BUDGET) as Pace[];
+
 const SAMPLE = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ';
 
-/** Reading settings, applied at once to every ayah screen and kept in the user database. */
+/** Reading settings and the daily pace, applied at once and kept in the user database. */
 export function SettingsScreen() {
   const colors = useColors();
   const settings = useSettings();
@@ -49,6 +53,34 @@ export function SettingsScreen() {
         </View>
         <Text style={[styles.hint, { color: colors.muted }]}>
           System follows your phone&apos;s light or dark mode.
+        </Text>
+      </Section>
+
+      <Section title="Daily pace" colors={colors}>
+        <View
+          style={[styles.segments, { borderColor: colors.accent }]}
+          accessibilityRole="radiogroup"
+        >
+          {PACES.map((value) => {
+            const selected = settings.pace === value;
+            return (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${PACE_LABELS[value]} pace`}
+                onPress={() => update({ pace: value })}
+                style={[styles.segment, selected && { backgroundColor: colors.accent }]}
+              >
+                <Text style={{ color: selected ? colors.background : colors.accent }}>
+                  {PACE_LABELS[value]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={[styles.hint, { color: colors.muted }]}>
+          {NEW_LEMMA_BUDGET[settings.pace]} new words a session, from the next one.
         </Text>
       </Section>
 

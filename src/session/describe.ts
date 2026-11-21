@@ -28,6 +28,11 @@ export function describePassages(passages: Passage[], surahs: SurahSummary[]): s
     .join(', ');
 }
 
+/** A streak said quietly, in days: "3 days". */
+export function describeStreak(days: number): string {
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
 /** " (words 16–30)" when the passage is only part of its ayah. */
 function partOfAyah(p: Passage): string {
   if (p.fromWord === 1 && p.toWord === p.ayahWords) return '';
