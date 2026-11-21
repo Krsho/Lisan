@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { EventDraft, ReviewEvent } from '../engine';
 import { SettingsProvider } from '../settings/SettingsContext';
@@ -31,6 +31,8 @@ function runnerFor(db: SQLiteDatabase): UserSqlRunner {
     all: (sql, params) => db.getAllAsync(sql, params),
     run: (sql, params) => db.runAsync(sql, params),
     exec: (sql) => db.execAsync(sql),
+    // withTransactionAsync is not exclusive: statements run meanwhile on this connection join the
+    // transaction. The store makes every write wait for the one before, so none overlap.
     async transaction(fn) {
       let result!: Awaited<ReturnType<typeof fn>>;
       await db.withTransactionAsync(async () => {
@@ -100,12 +102,19 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // A write that failed, shown over the app: progress that was not saved must not pass unnoticed.
+  const [writeFailed, setWriteFailed] = useState(false);
   const store = state.status === 'open' ? state.store : null;
   const record = useCallback(
     async (drafts: EventDraft[]) => {
       if (!store) throw new Error('The user database is not open');
-      const recorded = await store.record(drafts);
-      setState((s) => (s.status === 'open' ? { ...s, events: [...s.events, ...recorded] } : s));
+      try {
+        const recorded = await store.record(drafts);
+        setState((s) => (s.status === 'open' ? { ...s, events: [...s.events, ...recorded] } : s));
+      } catch (error) {
+        setWriteFailed(true);
+        throw error;
+      }
     },
     [store],
   );
@@ -116,9 +125,10 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
     (patch: Partial<ReadingSettings>) => {
       // Shown at once; written in the background, since settings are cheap to set again.
       setState((s) => (s.status === 'open' ? { ...s, settings: { ...s.settings, ...patch } } : s));
-      store
-        ?.saveSettings(serializeSettings(patch), Date.now())
-        .catch((error: unknown) => console.error('Failed to save settings', error));
+      store?.saveSettings(serializeSettings(patch), Date.now()).catch((error: unknown) => {
+        console.error('Failed to save settings', error);
+        setWriteFailed(true);
+      });
     },
     [store],
   );
@@ -141,7 +151,22 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
   }
   return (
     <SettingsProvider value={settingsValue}>
-      <EventLogContext.Provider value={log}>{children}</EventLogContext.Provider>
+      <EventLogContext.Provider value={log}>
+        {children}
+        {writeFailed ? (
+          <View
+            accessibilityRole="alert"
+            style={[styles.banner, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Text style={[styles.bannerText, { color: colors.text }]}>
+              Some of your progress couldn&apos;t be saved. Please try again.
+            </Text>
+            <Pressable accessibilityRole="button" onPress={() => setWriteFailed(false)} hitSlop={8}>
+              <Text style={{ color: colors.accent, fontWeight: '600' }}>Dismiss</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </EventLogContext.Provider>
     </SettingsProvider>
   );
 }
@@ -154,4 +179,15 @@ export function useEventLog(): EventLog {
 
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  banner: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 32,
+    padding: 12,
+    gap: 8,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  bannerText: { fontSize: 15, lineHeight: 20 },
 });

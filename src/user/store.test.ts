@@ -214,6 +214,58 @@ describe('user store', () => {
     expect(await store.listEvents()).toEqual([event]);
   });
 
+  it('keeps every write when several are made at once', async () => {
+    const store = await openStore();
+    const learn = (lemmaId: string, timestamp: number) =>
+      store.record([
+        { kind: 'learn', lemmaId, wordRef: fatiha, timestamp },
+        { kind: 'learn', lemmaId: `${lemmaId}-2`, wordRef: fatiha, timestamp },
+      ]);
+
+    // Answers saved one by one as they are given, and a setting changed meanwhile.
+    await Promise.all([
+      learn('a', 1),
+      learn('b', 2),
+      store.saveSettings([{ key: 'theme', value: '"dark"' }], 3),
+      learn('c', 4),
+    ]);
+
+    expect((await store.listEvents()).map((e) => e.lemmaId).sort()).toEqual([
+      'a',
+      'a-2',
+      'b',
+      'b-2',
+      'c',
+      'c-2',
+    ]);
+    expect(await store.listSettings()).toEqual([{ key: 'theme', value: '"dark"' }]);
+  });
+
+  it('keeps a setting saved while a failing write is rolled back', async () => {
+    await migrateUserDb(db);
+    // Each statement takes a moment, as on a device, so writes can overlap.
+    const tick = () => new Promise((resolve) => setImmediate(resolve));
+    const slow = {
+      ...db,
+      run: async (...args: Parameters<typeof db.run>) => (await tick(), db.run(...args)),
+    };
+    const store = createUserStore(slow, randomUUID);
+    await store.getDeviceId();
+    const bad = { kind: 'learn', lemmaId: 'x', wordRef: fatiha, timestamp: Symbol() };
+
+    const recording = store.record([
+      { kind: 'learn', lemmaId: 'a', wordRef: fatiha, timestamp: 1 },
+      bad as never,
+    ]);
+    await tick();
+    const saving = store.saveSettings([{ key: 'theme', value: '"dark"' }], 2);
+    const results = await Promise.allSettled([recording, saving]);
+
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'fulfilled']);
+    expect(await store.listEvents()).toEqual([]);
+    expect(await store.listSettings()).toEqual([{ key: 'theme', value: '"dark"' }]);
+  });
+
   it('lists the log oldest first', async () => {
     const store = await openStore();
 

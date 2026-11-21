@@ -83,6 +83,14 @@ const INSERT_EVENT = `
  */
 export function createUserStore(db: UserSqlRunner, newId: () => string) {
   let deviceId: Promise<string> | null = null;
+  // Every write waits for the one before: on one connection, a write made while another's
+  // transaction is open would try to open a transaction inside it, or be rolled back with it.
+  let writes: Promise<unknown> = Promise.resolve();
+  function serially<T>(write: () => Promise<T>): Promise<T> {
+    const result = writes.then(write);
+    writes = result.catch(() => {});
+    return result;
+  }
 
   async function loadDeviceId(): Promise<string> {
     const [row] = await db.all<{ value: string }>(
@@ -91,7 +99,9 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     );
     if (row) return row.value;
     // Random, not a hardware id: it only tells which device recorded an event.
-    await db.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('device_id', ?)", [newId()]);
+    await serially(() =>
+      db.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('device_id', ?)", [newId()]),
+    );
     const [created] = await db.all<{ value: string }>(
       "SELECT value FROM meta WHERE key = 'device_id'",
       [],
@@ -115,10 +125,12 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     },
 
     /** Adds complete events (e.g. from another device); ones already in the log are skipped. */
-    async addEvents(events: ReviewEvent[]): Promise<void> {
-      await db.transaction(async () => {
-        for (const event of events) await db.run(INSERT_EVENT, toRow(event));
-      });
+    addEvents(events: ReviewEvent[]): Promise<void> {
+      return serially(() =>
+        db.transaction(async () => {
+          for (const event of events) await db.run(INSERT_EVENT, toRow(event));
+        }),
+      );
     },
 
     /** The whole log, oldest first. */
@@ -147,15 +159,18 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     },
 
     /** Stores settings, replacing their previous values; `updatedAt` is epoch ms. */
-    async saveSettings(rows: SettingRow[], updatedAt: number): Promise<void> {
-      // One statement per setting, each atomic on its own, and no transaction: a quick run of
-      // changes (tapping A+ twice) must not try to open a transaction inside another.
-      for (const { key, value } of rows)
-        await db.run(
-          `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-             ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-          [key, value, updatedAt],
-        );
+    saveSettings(rows: SettingRow[], updatedAt: number): Promise<void> {
+      return serially(() =>
+        db.transaction(async () => {
+          for (const { key, value } of rows)
+            await db.run(
+              `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+                 ON CONFLICT (key) DO UPDATE
+                   SET value = excluded.value, updated_at = excluded.updated_at`,
+              [key, value, updatedAt],
+            );
+        }),
+      );
     },
   };
   return store;
