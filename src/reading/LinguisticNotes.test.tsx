@@ -2,6 +2,9 @@ import { render, screen } from '@testing-library/react-native';
 
 import { LinguisticNotes } from './LinguisticNotes';
 
+// The KFGQPC font is not committed (see content/README.md), so CI has no file to require.
+jest.mock('../theme/quranFont', () => ({ QURAN_FONT_FAMILY: 'quran' }));
+
 const words = [
   { position: 1, text: 'ٱلۡحَمۡدُ', bare: 'ٱلۡحَمۡدُ', gloss: 'All praises' },
   { position: 2, text: 'لِلَّهِ', bare: 'لِلَّهِ', gloss: 'to Allah' },
