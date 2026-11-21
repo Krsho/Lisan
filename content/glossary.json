@@ -1,0 +1,632 @@
+{
+  "concept.root": {
+    "ar": "الجذر",
+    "en": {
+      "name": "root",
+      "definition": "The core letters, usually three, shared by a family of related words. For example ر ح م (mercy) gives رَحْمَٰن, رَحِيم and رَحْمَة."
+    }
+  },
+  "concept.lemma": {
+    "ar": "أصل الكلمة",
+    "en": {
+      "name": "lemma",
+      "definition": "The dictionary form of a word: the basic form you would look up, before prefixes, suffixes and endings are added."
+    }
+  },
+  "role.prefix": {
+    "ar": "سابقة",
+    "en": {
+      "name": "prefix",
+      "definition": "A letter or short particle joined to the front of a word, such as وَ (and), بِ (in, with) or ال (the)."
+    }
+  },
+  "role.suffix": {
+    "ar": "لاحقة",
+    "en": {
+      "name": "suffix",
+      "definition": "A letter or short form joined to the end of a word, most often an attached pronoun such as هُمْ (them) or نَا (us)."
+    }
+  },
+  "pos.noun": {
+    "ar": "اسم",
+    "en": {
+      "name": "noun",
+      "definition": "A word that names a person, thing, place, quality or idea. Arabic nouns carry case endings that show their role in the sentence."
+    }
+  },
+  "pos.verb": {
+    "ar": "فعل",
+    "en": {
+      "name": "verb",
+      "definition": "A word that expresses an action or state. Its form changes for tense, person, gender and number."
+    }
+  },
+  "pos.proper-noun": {
+    "ar": "اسم علم",
+    "en": {
+      "name": "proper noun",
+      "definition": "The name of a specific person, place or being, such as اللَّه, مُوسَى or مَكَّة."
+    }
+  },
+  "pos.pronoun": {
+    "ar": "ضمير",
+    "en": {
+      "name": "pronoun",
+      "definition": "A word that stands in for a noun: a separate word such as هُوَ (he), or an ending attached to a verb, noun or particle."
+    }
+  },
+  "pos.demonstrative": {
+    "ar": "اسم إشارة",
+    "en": {
+      "name": "demonstrative",
+      "definition": "A word that points to something, such as هَٰذَا (this) or ذَٰلِكَ (that)."
+    }
+  },
+  "pos.relative": {
+    "ar": "اسم موصول",
+    "en": {
+      "name": "relative pronoun",
+      "definition": "A word such as الَّذِي (who, which) or مَا (what) that links a noun to a clause describing it."
+    }
+  },
+  "pos.time-adverb": {
+    "ar": "ظرف زمان",
+    "en": {
+      "name": "adverb of time",
+      "definition": "A noun used to say when something happens, such as يَوْمَ (on the day) or إِذْ (when)."
+    }
+  },
+  "pos.location-adverb": {
+    "ar": "ظرف مكان",
+    "en": {
+      "name": "adverb of place",
+      "definition": "A noun used to say where something is, such as عِنْدَ (with, at) or تَحْتَ (beneath)."
+    }
+  },
+  "pos.verb-like-noun": {
+    "ar": "اسم فعل",
+    "en": {
+      "name": "verb-like noun",
+      "definition": "A word that is a noun in form but works like a verb, such as هَيْهَاتَ (how far!) or أُفٍّ (ugh!)."
+    }
+  },
+  "pos.conditional-noun": {
+    "ar": "اسم شرط",
+    "en": {
+      "name": "conditional noun",
+      "definition": "A noun that introduces a condition, such as مَنْ (whoever) or مَا (whatever)."
+    }
+  },
+  "pos.interrogative-noun": {
+    "ar": "اسم استفهام",
+    "en": {
+      "name": "interrogative noun",
+      "definition": "A noun used to ask a question, such as مَنْ (who?), مَا (what?) or كَيْفَ (how?)."
+    }
+  },
+  "particle.preposition": {
+    "ar": "حرف جر",
+    "en": {
+      "name": "preposition",
+      "definition": "A particle such as فِي (in), مِنْ (from) or بِ (with) that puts the noun after it in the genitive case."
+    }
+  },
+  "particle.definite-article": {
+    "ar": "أداة التعريف",
+    "en": {
+      "name": "definite article",
+      "definition": "The prefix ال (the), which makes a noun definite."
+    }
+  },
+  "particle.conjunction": {
+    "ar": "حرف عطف",
+    "en": {
+      "name": "coordinating conjunction",
+      "definition": "A particle such as وَ (and), فَ (then, so) or ثُمَّ (then) that joins words or clauses of equal standing."
+    }
+  },
+  "particle.resumption": {
+    "ar": "حرف استئناف",
+    "en": {
+      "name": "resumption particle",
+      "definition": "A particle, usually وَ or فَ, that starts a new sentence rather than joining it to the previous one."
+    }
+  },
+  "particle.subordinating": {
+    "ar": "حرف مصدري",
+    "en": {
+      "name": "subordinating particle",
+      "definition": "A particle such as أَنْ (that) that turns the clause after it into the equivalent of a verbal noun."
+    }
+  },
+  "particle.accusative": {
+    "ar": "حرف نصب",
+    "en": {
+      "name": "accusative particle",
+      "definition": "A particle such as إِنَّ (indeed) or أَنَّ (that) that puts the noun after it in the accusative case, or puts the verb after it in the subjunctive mood."
+    }
+  },
+  "particle.negative": {
+    "ar": "حرف نفي",
+    "en": {
+      "name": "negative particle",
+      "definition": "A particle such as لَا, لَمْ, لَنْ or مَا that negates what follows it."
+    }
+  },
+  "particle.emphatic": {
+    "ar": "لام التوكيد",
+    "en": {
+      "name": "emphatic lām",
+      "definition": "The prefix لَ used to emphasise a statement (surely, indeed)."
+    }
+  },
+  "particle.imperative-lam": {
+    "ar": "لام الأمر",
+    "en": {
+      "name": "imperative lām",
+      "definition": "The prefix لِ placed before an imperfect verb to give a command (let him …). The verb becomes jussive."
+    }
+  },
+  "particle.purpose": {
+    "ar": "لام التعليل",
+    "en": {
+      "name": "purpose lām",
+      "definition": "The prefix لِ placed before a verb to express purpose (in order to, so that)."
+    }
+  },
+  "particle.conditional": {
+    "ar": "حرف شرط",
+    "en": {
+      "name": "conditional particle",
+      "definition": "A particle such as إِنْ (if), لَوْ (if only) or إِذَا (when) that introduces a condition."
+    }
+  },
+  "particle.interrogative": {
+    "ar": "حرف استفهام",
+    "en": {
+      "name": "interrogative particle",
+      "definition": "A particle such as أَ or هَلْ that turns a sentence into a question."
+    }
+  },
+  "particle.vocative": {
+    "ar": "حرف نداء",
+    "en": {
+      "name": "vocative particle",
+      "definition": "A particle such as يَا (O …!) used to call or address someone."
+    }
+  },
+  "particle.certainty": {
+    "ar": "حرف تحقيق",
+    "en": {
+      "name": "particle of certainty",
+      "definition": "The particle قَدْ before a perfect verb, meaning that something has certainly happened."
+    }
+  },
+  "particle.restriction": {
+    "ar": "أداة حصر",
+    "en": {
+      "name": "restriction particle",
+      "definition": "A particle such as إِلَّا after a negation, restricting a statement to one thing (none but …, only …)."
+    }
+  },
+  "particle.retraction": {
+    "ar": "حرف إضراب",
+    "en": {
+      "name": "retraction particle",
+      "definition": "The particle بَلْ (rather, nay), which sets aside what came before in favour of what follows."
+    }
+  },
+  "particle.preventive": {
+    "ar": "حرف كافّ",
+    "en": {
+      "name": "preventive particle",
+      "definition": "The particle مَا attached to a word such as إِنَّ (إِنَّمَا), stopping it from affecting the case of what follows."
+    }
+  },
+  "particle.future": {
+    "ar": "حرف استقبال",
+    "en": {
+      "name": "future particle",
+      "definition": "The particle سَ or سَوْفَ before an imperfect verb, marking the future (will)."
+    }
+  },
+  "particle.exceptive": {
+    "ar": "أداة استثناء",
+    "en": {
+      "name": "exceptive particle",
+      "definition": "A particle such as إِلَّا (except) that excludes something from a general statement."
+    }
+  },
+  "particle.cause": {
+    "ar": "حرف سببية",
+    "en": {
+      "name": "particle of cause",
+      "definition": "The particle فَ when it introduces a result caused by what came before (so that, and so)."
+    }
+  },
+  "particle.explanation": {
+    "ar": "حرف تفصيل",
+    "en": {
+      "name": "explanation particle",
+      "definition": "The particle أَمَّا (as for), which introduces a detailed explanation."
+    }
+  },
+  "particle.amendment": {
+    "ar": "حرف استدراك",
+    "en": {
+      "name": "amendment particle",
+      "definition": "The particle لَٰكِنْ (but), which corrects or qualifies what came before."
+    }
+  },
+  "particle.answer": {
+    "ar": "حرف جواب",
+    "en": {
+      "name": "answer particle",
+      "definition": "A particle such as بَلَىٰ (yes indeed) or نَعَمْ (yes) used to answer."
+    }
+  },
+  "particle.inceptive": {
+    "ar": "حرف ابتداء",
+    "en": {
+      "name": "inceptive particle",
+      "definition": "A particle such as حَتَّىٰ or أَلَا that begins a new clause."
+    }
+  },
+  "particle.interpretation": {
+    "ar": "حرف تفسير",
+    "en": {
+      "name": "particle of interpretation",
+      "definition": "The particle أَنْ when it explains the content of something said or commanded (namely, that is)."
+    }
+  },
+  "particle.exhortation": {
+    "ar": "حرف تحضيض",
+    "en": {
+      "name": "exhortation particle",
+      "definition": "A particle such as لَوْلَا or هَلَّا urging someone to act (why not …?)."
+    }
+  },
+  "particle.surprise": {
+    "ar": "حرف فجاءة",
+    "en": {
+      "name": "surprise particle",
+      "definition": "The particle إِذَا expressing that something happened suddenly (and behold …)."
+    }
+  },
+  "particle.aversion": {
+    "ar": "حرف ردع",
+    "en": {
+      "name": "aversion particle",
+      "definition": "The particle كَلَّا (no indeed!), which rejects what came before."
+    }
+  },
+  "particle.result": {
+    "ar": "حرف واقع في جواب الشرط",
+    "en": {
+      "name": "result particle",
+      "definition": "The particle فَ that begins the result clause of a condition (then …)."
+    }
+  },
+  "particle.supplemental": {
+    "ar": "حرف زائد",
+    "en": {
+      "name": "supplemental particle",
+      "definition": "A particle that adds emphasis without changing the grammatical structure, such as مَا in فَبِمَا."
+    }
+  },
+  "particle.circumstantial": {
+    "ar": "حرف حال",
+    "en": {
+      "name": "circumstantial particle",
+      "definition": "The particle وَ introducing a clause that describes the circumstances of the action (while …)."
+    }
+  },
+  "particle.prohibition": {
+    "ar": "حرف نهي",
+    "en": {
+      "name": "prohibition particle",
+      "definition": "The particle لَا before an imperfect verb in the jussive, forbidding an action (do not …)."
+    }
+  },
+  "particle.equalization": {
+    "ar": "حرف تسوية",
+    "en": {
+      "name": "equalization particle",
+      "definition": "The particle أَ meaning it makes no difference whether … or …."
+    }
+  },
+  "particle.comitative": {
+    "ar": "واو المعية",
+    "en": {
+      "name": "comitative wāw",
+      "definition": "The particle وَ meaning together with, rather than and."
+    }
+  },
+  "particle.attention": {
+    "ar": "حرف تنبيه",
+    "en": {
+      "name": "attention particle",
+      "definition": "The particle هَا that draws attention, as at the start of هَٰذَا (this) or in يَٰٓأَيُّهَا (O you)."
+    }
+  },
+  "particle.distance": {
+    "ar": "لام البعد",
+    "en": {
+      "name": "lām of distance",
+      "definition": "The لِ inside ذَٰلِكَ (that) and similar words, marking something as further away."
+    }
+  },
+  "particle.addressee": {
+    "ar": "حرف خطاب",
+    "en": {
+      "name": "addressee particle",
+      "definition": "The كَ ending of words such as ذَٰلِكَ (that), showing who is being addressed."
+    }
+  },
+  "particle.quranic-initials": {
+    "ar": "حروف مقطعة",
+    "en": {
+      "name": "disconnected letters",
+      "definition": "Letters at the start of some surahs, such as الٓمٓ, read letter by letter. Their meaning is known only to Allah."
+    }
+  },
+  "derivation.active-participle": {
+    "ar": "اسم فاعل",
+    "en": {
+      "name": "active participle",
+      "definition": "A noun formed from a verb for the one who does the action, such as مَالِك (owner, master) from مَلَكَ (to own)."
+    }
+  },
+  "derivation.passive-participle": {
+    "ar": "اسم مفعول",
+    "en": {
+      "name": "passive participle",
+      "definition": "A noun formed from a verb for the one the action is done to, such as مَغْضُوب (one who earned anger) from غَضِبَ."
+    }
+  },
+  "derivation.verbal-noun": {
+    "ar": "مصدر",
+    "en": {
+      "name": "verbal noun",
+      "definition": "A noun naming the action of a verb itself, such as هُدَى (guidance) from هَدَى (to guide)."
+    }
+  },
+  "attribute.adjective": {
+    "ar": "نعت",
+    "en": {
+      "name": "adjective",
+      "definition": "A noun that describes the noun before it and agrees with it in case, gender, number and definiteness."
+    }
+  },
+  "state.indefinite": {
+    "ar": "نكرة",
+    "en": {
+      "name": "indefinite",
+      "definition": "A noun without ال or another marker of definiteness (a, an, some), usually ending in tanwīn."
+    }
+  },
+  "case.nominative": {
+    "ar": "مرفوع",
+    "en": {
+      "name": "nominative",
+      "definition": "The case of a noun that is the subject or the topic of a sentence, typically marked with ـُ (ḍamma)."
+    }
+  },
+  "case.accusative": {
+    "ar": "منصوب",
+    "en": {
+      "name": "accusative",
+      "definition": "The case of a noun that is the object of a verb, or follows particles such as إِنَّ, typically marked with ـَ (fatḥa)."
+    }
+  },
+  "case.genitive": {
+    "ar": "مجرور",
+    "en": {
+      "name": "genitive",
+      "definition": "The case of a noun after a preposition, or the second noun in a possessive construction (the name of Allah), typically marked with ـِ (kasra)."
+    }
+  },
+  "aspect.perfect": {
+    "ar": "فعل ماض",
+    "en": {
+      "name": "perfect verb",
+      "definition": "A verb for a completed action, usually translated with the past tense."
+    }
+  },
+  "aspect.imperfect": {
+    "ar": "فعل مضارع",
+    "en": {
+      "name": "imperfect verb",
+      "definition": "A verb for an ongoing, habitual or future action, usually translated with the present or future tense."
+    }
+  },
+  "aspect.imperative": {
+    "ar": "فعل أمر",
+    "en": {
+      "name": "imperative verb",
+      "definition": "A verb that gives a command or makes a request, such as ٱهْدِنَا (guide us)."
+    }
+  },
+  "voice.passive": {
+    "ar": "مبني للمجهول",
+    "en": {
+      "name": "passive voice",
+      "definition": "The verb's subject receives the action instead of doing it, such as أُنزِلَ (was sent down)."
+    }
+  },
+  "mood.indicative": {
+    "ar": "مرفوع",
+    "en": {
+      "name": "indicative mood",
+      "definition": "The ordinary mood of an imperfect verb for statements, typically ending in ـُ or ـونَ."
+    }
+  },
+  "mood.subjunctive": {
+    "ar": "منصوب",
+    "en": {
+      "name": "subjunctive mood",
+      "definition": "The mood of an imperfect verb after particles such as أَنْ and لَنْ, typically ending in ـَ or losing its final نَ."
+    }
+  },
+  "mood.jussive": {
+    "ar": "مجزوم",
+    "en": {
+      "name": "jussive mood",
+      "definition": "The mood of an imperfect verb after لَمْ, in prohibitions and in conditions, typically ending in sukūn or losing its final نَ."
+    }
+  },
+  "form.1": {
+    "ar": "فَعَلَ",
+    "en": {
+      "name": "form I",
+      "definition": "The basic verb pattern, built directly on the root."
+    }
+  },
+  "form.2": {
+    "ar": "فَعَّلَ",
+    "en": {
+      "name": "form II",
+      "definition": "Doubles the middle root letter. Often intensive or causative: to make someone do something."
+    }
+  },
+  "form.3": {
+    "ar": "فَاعَلَ",
+    "en": {
+      "name": "form III",
+      "definition": "Adds ا after the first root letter. Often means doing the action with or towards someone."
+    }
+  },
+  "form.4": {
+    "ar": "أَفْعَلَ",
+    "en": {
+      "name": "form IV",
+      "definition": "Adds أَ before the root. Often causative: to cause something to happen, such as أَنزَلَ (to send down)."
+    }
+  },
+  "form.5": {
+    "ar": "تَفَعَّلَ",
+    "en": {
+      "name": "form V",
+      "definition": "Adds تَ to form II. Often reflexive: to do the action to oneself, or gradually."
+    }
+  },
+  "form.6": {
+    "ar": "تَفَاعَلَ",
+    "en": {
+      "name": "form VI",
+      "definition": "Adds تَ to form III. Often reciprocal: to do the action to one another."
+    }
+  },
+  "form.7": {
+    "ar": "انْفَعَلَ",
+    "en": {
+      "name": "form VII",
+      "definition": "Adds ان before the root. Usually passive or reflexive in meaning."
+    }
+  },
+  "form.8": {
+    "ar": "افْتَعَلَ",
+    "en": {
+      "name": "form VIII",
+      "definition": "Adds ا before and ت after the first root letter. Often reflexive or doing the action for oneself."
+    }
+  },
+  "form.9": {
+    "ar": "افْعَلَّ",
+    "en": {
+      "name": "form IX",
+      "definition": "Doubles the last root letter. Used for colours and physical states, such as becoming black."
+    }
+  },
+  "form.10": {
+    "ar": "اسْتَفْعَلَ",
+    "en": {
+      "name": "form X",
+      "definition": "Adds است before the root. Often means seeking or asking for the action, such as نَسْتَعِينُ (we ask for help)."
+    }
+  },
+  "form.11": {
+    "ar": "افْعَالَّ",
+    "en": {
+      "name": "form XI",
+      "definition": "A rare pattern, like form IX with a long vowel, used for intense colours and states."
+    }
+  },
+  "person.first": {
+    "ar": "متكلم",
+    "en": {
+      "name": "first person",
+      "definition": "The speaker: I or we."
+    }
+  },
+  "person.second": {
+    "ar": "مخاطب",
+    "en": {
+      "name": "second person",
+      "definition": "The one spoken to: you."
+    }
+  },
+  "person.third": {
+    "ar": "غائب",
+    "en": {
+      "name": "third person",
+      "definition": "The one spoken about: he, she, it or they."
+    }
+  },
+  "gender.masculine": {
+    "ar": "مذكر",
+    "en": {
+      "name": "masculine",
+      "definition": "Grammatically masculine. Arabic marks gender on nouns, pronouns, adjectives and verbs."
+    }
+  },
+  "gender.feminine": {
+    "ar": "مؤنث",
+    "en": {
+      "name": "feminine",
+      "definition": "Grammatically feminine, often marked with ة (tā' marbūṭa) on nouns and ت on verbs."
+    }
+  },
+  "number.singular": {
+    "ar": "مفرد",
+    "en": {
+      "name": "singular",
+      "definition": "One person or thing."
+    }
+  },
+  "number.dual": {
+    "ar": "مثنى",
+    "en": {
+      "name": "dual",
+      "definition": "Exactly two. Arabic has special forms for two, such as ـَانِ and ـَيْنِ."
+    }
+  },
+  "number.plural": {
+    "ar": "جمع",
+    "en": {
+      "name": "plural",
+      "definition": "Three or more persons or things."
+    }
+  },
+  "family.inna": {
+    "ar": "إنّ وأخواتها",
+    "en": {
+      "name": "inna and its sisters",
+      "definition": "Particles such as إِنَّ, أَنَّ, لَٰكِنَّ and لَعَلَّ. The noun after them becomes accusative and their predicate stays nominative."
+    }
+  },
+  "family.kana": {
+    "ar": "كان وأخواتها",
+    "en": {
+      "name": "kāna and its sisters",
+      "definition": "Verbs such as كَانَ (was), أَصْبَحَ and لَيْسَ. Their subject stays nominative and their predicate becomes accusative."
+    }
+  },
+  "family.kada": {
+    "ar": "كاد وأخواتها",
+    "en": {
+      "name": "kāda and its sisters",
+      "definition": "Verbs of nearness and beginning, such as كَادَ (almost) and عَسَىٰ (perhaps), followed by an imperfect verb."
+    }
+  }
+}

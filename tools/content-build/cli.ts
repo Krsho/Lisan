@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { CONTENT_VERSION } from '../../src/content/version.ts';
 import { buildContentDatabase } from './build.ts';
+import { parseGlossary } from './glossary.ts';
 import { parseQulWordByWord } from './qul.ts';
 
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -29,6 +30,7 @@ buildContentDatabase({
   tanzilText: read('quran-uthmani.txt'),
   morphologyText: read('quran-morphology.txt'),
   glosses: { en: parseQulWordByWord(readFileSync(QUL_ENGLISH_WORD_BY_WORD, 'utf8')) },
+  glossary: parseGlossary(readFileSync(join(ROOT, 'content', 'glossary.json'), 'utf8')),
   surahs: SURAHS,
   contentVersion: CONTENT_VERSION,
   outFile,
