@@ -28,6 +28,7 @@ import {
 import { AyahTranslation } from '../reading/AyahTranslation';
 import { LinguisticNotes, notesFor, useLinguisticNotes } from '../reading/LinguisticNotes';
 import { WordDetailSheet } from '../reading/WordDetailSheet';
+import { ReminderOffer } from '../reminder/ReminderOffer';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { useSettings } from '../settings/SettingsContext';
@@ -440,6 +441,7 @@ function Summary({
           ? 'You have finished the path.'
           : `Next: ${surahs.status === 'loaded' ? describePassages(next.newMaterial, surahs.surahs) : '…'}`}
       </Text>
+      <ReminderOffer />
       <Pressable
         accessibilityRole="button"
         onPress={onDone}

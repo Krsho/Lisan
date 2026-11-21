@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { ContentProvider } from '../content/ContentProvider';
+import { ReminderScheduler } from '../reminder/ReminderScheduler';
 import { useColors, useColorSchemeName } from '../theme/colors';
 import { QURAN_FONTS } from '../theme/quranFont';
 import { UserStoreProvider } from '../user/UserStoreProvider';
@@ -23,6 +24,7 @@ export default function RootLayout() {
   return (
     <ContentProvider>
       <UserStoreProvider>
+        <ReminderScheduler />
         <AppStack />
       </UserStoreProvider>
     </ContentProvider>

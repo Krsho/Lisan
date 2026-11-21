@@ -8,7 +8,7 @@ import {
 } from './settings';
 
 describe('reading settings', () => {
-  it('defaults to the system theme, normal size, translation shown, tafsir hidden, normal pace', () => {
+  it('defaults to the system theme, normal size, translation shown, tafsir hidden, normal pace, no reminder', () => {
     expect(parseSettings([])).toEqual({
       theme: 'system',
       arabicFontScale: 1,
@@ -16,6 +16,9 @@ describe('reading settings', () => {
       showTafsir: false,
       pace: 'normal',
       onboarded: false,
+      reminderEnabled: false,
+      reminderTime: 20 * 60,
+      reminderOffered: false,
     });
   });
 
@@ -27,6 +30,9 @@ describe('reading settings', () => {
       showTafsir: true,
       pace: 'intense',
       onboarded: true,
+      reminderEnabled: true,
+      reminderTime: 6 * 60 + 45,
+      reminderOffered: true,
     };
 
     expect(parseSettings(serializeSettings(stored as typeof DEFAULT_READING_SETTINGS))).toEqual(
@@ -42,6 +48,8 @@ describe('reading settings', () => {
       { key: 'arabicFontScale', value: '1.15' },
       { key: 'pace', value: '"frantic"' },
       { key: 'onboarded', value: '1' },
+      { key: 'reminderEnabled', value: '"on"' },
+      { key: 'reminderTime', value: '1440' },
     ]);
 
     expect(settings).toEqual({ ...DEFAULT_READING_SETTINGS, arabicFontScale: 1.15 });
@@ -59,6 +67,12 @@ describe('reading settings', () => {
 
     expect(parseSettings([{ key: 'arabicFontScale', value: '9' }]).arabicFontScale).toBe(max);
     expect(parseSettings([{ key: 'arabicFontScale', value: '0' }]).arabicFontScale).toBe(min);
+  });
+
+  it('ignores a reminder time that is not a whole minute of the day', () => {
+    expect(parseSettings([{ key: 'reminderTime', value: '-5' }]).reminderTime).toBe(20 * 60);
+    expect(parseSettings([{ key: 'reminderTime', value: '480.5' }]).reminderTime).toBe(20 * 60);
+    expect(parseSettings([{ key: 'reminderTime', value: '480' }]).reminderTime).toBe(480);
   });
 
   it('stores only the settings that changed', () => {

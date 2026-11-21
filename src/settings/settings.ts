@@ -1,5 +1,5 @@
 /**
- * The learner's settings (reading, and the learning pace): what they are, their defaults, and how they are read back from the user
+ * The learner's settings (reading, the learning pace and the daily reminder): what they are, their defaults, and how they are read back from the user
  * database. Pure, so the rules are tested without React or SQLite.
  *
  * Each setting is stored as its own row (key, JSON value), so a device that doesn't know a key
@@ -24,6 +24,12 @@ export type ReadingSettings = {
   pace: Pace;
   /** Whether the learner has been through onboarding (shown on first launch). */
   onboarded: boolean;
+  /** Whether the daily reminder notification is on. Off until the learner turns it on. */
+  reminderEnabled: boolean;
+  /** When the daily reminder fires, in minutes after midnight (local time). Kept while it is off. */
+  reminderTime: number;
+  /** Whether the reminder has been offered after a completed session (it is offered only once). */
+  reminderOffered: boolean;
   // Reserved: `hideTashkeel` (the hide-tashkeel challenge mode) is a later feature. Don't reuse
   // the key for anything else.
 };
@@ -37,7 +43,12 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   showTafsir: false,
   pace: 'normal',
   onboarded: false,
+  reminderEnabled: false,
+  reminderTime: 20 * 60,
+  reminderOffered: false,
 };
+
+export const MINUTES_PER_DAY = 24 * 60;
 
 /** The sizes the settings screen steps through, smallest first. */
 export const ARABIC_FONT_SCALES: readonly number[] = [0.85, 1, 1.15, 1.3, 1.5, 1.75];
@@ -60,9 +71,18 @@ function validate(key: SettingKey, value: unknown): ReadingSettings[SettingKey] 
     case 'showTranslation':
     case 'showTafsir':
     case 'onboarded':
+    case 'reminderEnabled':
+    case 'reminderOffered':
       return typeof value === 'boolean' ? value : undefined;
     case 'pace':
       return PACES.has(value) ? (value as Pace) : undefined;
+    case 'reminderTime':
+      return typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value < MINUTES_PER_DAY
+        ? value
+        : undefined;
   }
 }
 

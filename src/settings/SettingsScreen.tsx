@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { NEW_LEMMA_BUDGET, type Pace } from '../engine';
+import { ReminderSettings } from '../reminder/ReminderControls';
 import { useColors, type Colors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { PACE_LABELS } from './pace';
@@ -18,7 +19,7 @@ const PACES = Object.keys(NEW_LEMMA_BUDGET) as Pace[];
 
 const SAMPLE = 'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ';
 
-/** Reading settings and the daily pace, applied at once and kept in the user database. */
+/** Reading settings, the daily pace and the reminder, applied at once and kept in the user database. */
 export function SettingsScreen() {
   const colors = useColors();
   const settings = useSettings();
@@ -82,6 +83,10 @@ export function SettingsScreen() {
         <Text style={[styles.hint, { color: colors.muted }]}>
           {NEW_LEMMA_BUDGET[settings.pace]} new words a session, from the next one.
         </Text>
+      </Section>
+
+      <Section title="Reminder" colors={colors}>
+        <ReminderSettings />
       </Section>
 
       <Section title="Arabic font size" colors={colors}>
