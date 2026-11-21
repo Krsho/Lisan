@@ -1,5 +1,6 @@
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { CenteredStatus } from '../async/CenteredStatus';
 import type { SurahSummary } from '../content/repository';
 import { useSurahs } from '../content/useSurahs';
 import { useColors } from '../theme/colors';
@@ -14,20 +15,14 @@ export function SurahList({ onOpenSurah }: Props) {
 
   if (state.status !== 'loaded') {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {state.status === 'failed' ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load the surahs.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
+      <CenteredStatus failed={state.status === 'failed'} message="Couldn't load the surahs." />
     );
   }
 
   return (
     <FlatList
       style={{ backgroundColor: colors.background }}
-      data={state.surahs}
+      data={state.data}
       keyExtractor={(item) => String(item.surah)}
       renderItem={({ item }) => <SurahRow summary={item} onPress={() => onOpenSurah(item.surah)} />}
       ItemSeparatorComponent={() => (
@@ -59,7 +54,6 @@ function SurahRow({ summary, onPress }: { summary: SurahSummary; onPress: () => 
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
   number: {
     width: 36,

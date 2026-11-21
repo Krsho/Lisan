@@ -1,50 +1,31 @@
-import { useMemo } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useNow } from '../clock/clock';
+import { CenteredStatus } from '../async/CenteredStatus';
 import { useSurahs } from '../content/useSurahs';
-import { planSession, progress, streak, type Content } from '../engine';
-import { useSettings } from '../settings/SettingsContext';
+import type { Content } from '../engine';
 import { useColors } from '../theme/colors';
-import { useEventLog } from '../user/UserStoreProvider';
 import { describePassages, describeStreak } from './describe';
+import { useDailyStatus } from './useDailyStatus';
 import { usePath } from './usePath';
 
 type Props = { onStart: () => void; onBrowse: () => void; onProgress: () => void };
 
 /** Home: today's session, and the way into browsing the whole Quran. */
 export function TodayScreen(props: Props) {
-  const colors = useColors();
   const path = usePath();
-
   if (path.status !== 'loaded') {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {path.status === 'failed' ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load today&apos;s session.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
+      <CenteredStatus failed={path.status === 'failed'} message="Couldn't load today's session." />
     );
   }
-  return <Today content={path.content} {...props} />;
+  return <Today content={path.data} {...props} />;
 }
 
 function Today({ content, onStart, onBrowse, onProgress }: Props & { content: Content }) {
   const colors = useColors();
-  const { events } = useEventLog();
-  const { pace } = useSettings();
   const surahs = useSurahs();
-  const now = useNow();
-  const plan = useMemo(
-    () => planSession(content, events, { pace }, now),
-    [content, events, pace, now],
-  );
-  const learned = useMemo(() => progress(content, events).wordsLearned, [content, events]);
-  const days = useMemo(() => streak(events, now), [events, now]);
-  const next =
-    surahs.status === 'loaded' ? describePassages(plan.newMaterial, surahs.surahs) : null;
+  const { plan, wordsLearned: learned, streak: days } = useDailyStatus(content);
+  const next = surahs.status === 'loaded' ? describePassages(plan.newMaterial, surahs.data) : null;
   const finished = plan.newMaterial.length === 0;
 
   return (
@@ -125,7 +106,6 @@ function Today({ content, onStart, onBrowse, onProgress }: Props & { content: Co
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, gap: 16 },
   card: { borderRadius: 12, padding: 16, gap: 8 },
   title: { fontSize: 20, fontWeight: '700' },

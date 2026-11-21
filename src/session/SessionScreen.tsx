@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CenteredStatus } from '../async/CenteredStatus';
+import { useAsync } from '../async/useAsync';
 import { AyahPlayButton, RecitationCredit, RecitationError } from '../audio/RecitationControls';
 import { audioSource } from '../audio/source';
 import { useAyahPlayback, type AyahPlayback } from '../audio/useRecitation';
@@ -11,17 +13,15 @@ import type {
   Word,
   WordRef,
 } from '../content/repository';
-import { currentNow, useNow } from '../clock/clock';
+import { currentNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
 import {
   completeSession,
   knownLemmas,
   markKnown,
   planQuiz,
-  progress,
   planReview,
   planSession,
-  streak,
   undoKnown,
   type Content,
   type NewLemma,
@@ -39,6 +39,7 @@ import { useSettings } from '../settings/SettingsContext';
 import { useEventLog } from '../user/UserStoreProvider';
 import { describePassages, describeStreak } from './describe';
 import { QuizScreen, type QuizResult } from './QuizScreen';
+import { useDailyStatus } from './useDailyStatus';
 import { useQuizContent } from './useQuizContent';
 import { usePath } from './usePath';
 
@@ -49,21 +50,13 @@ type Props = { onDone: () => void };
  * a quiz on their new words, then a summary.
  */
 export function SessionScreen({ onDone }: Props) {
-  const colors = useColors();
   const path = usePath();
-
   if (path.status !== 'loaded') {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {path.status === 'failed' ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load today&apos;s session.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
+      <CenteredStatus failed={path.status === 'failed'} message="Couldn't load today's session." />
     );
   }
-  return <Session content={path.content} onDone={onDone} />;
+  return <Session content={path.data} onDone={onDone} />;
 }
 
 type Loaded = {
@@ -81,8 +74,6 @@ function Session({ content, onDone }: Props & { content: Content }) {
   const { pace } = useSettings();
   // Planned once: marking "I know this" during the session doesn't change what is studied today.
   const [plan] = useState<SessionPlan>(() => planSession(content, events, { pace }, currentNow()));
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [failed, setFailed] = useState(false);
   const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
   const [learnedNow, setLearnedNow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -96,11 +87,11 @@ function Session({ content, onDone }: Props & { content: Content }) {
   // One player for the session's ayahs, new and recapped, streamed or from a download.
   const playback = useAyahPlayback(audioSource);
   const known = useMemo(() => knownLemmas(events), [events]);
-  const surahs = useMemo(
+  const studiedSurahs = useMemo(
     () => [...new Set([...plan.recap, ...plan.newMaterial].map((p) => p.surah))],
     [plan],
   );
-  const notes = useLinguisticNotes(surahs, 'en');
+  const notes = useLinguisticNotes(studiedSurahs, 'en');
   // The words of the review and the quiz, loaded together so the quiz is ready after studying.
   const asked = useMemo(() => [...plan.reviews, ...plan.newLemmas], [plan]);
   const quizContent = useQuizContent(asked);
@@ -113,52 +104,43 @@ function Session({ content, onDone }: Props & { content: Content }) {
     return planReview(plan, startEvents, quizContent.data);
   }, [plan, startEvents, quizContent]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const surahs = [
-      ...new Set(
-        [...plan.reviews.map((r) => r.wordRef), ...plan.recap, ...plan.newMaterial].map(
-          (p) => p.surah,
+  // The ayahs of the review's words as well, for their context.
+  const ayahsState = useAsync(
+    async (): Promise<Loaded> => {
+      const surahsShown = [
+        ...new Set(
+          [...plan.reviews.map((r) => r.wordRef), ...plan.recap, ...plan.newMaterial].map(
+            (p) => p.surah,
+          ),
         ),
-      ),
-    ];
-    Promise.all(
-      surahs.map((surah) =>
-        Promise.all([repository.getSurah(surah, 'en'), repository.getTranslations(surah, 'en')]),
-      ),
-    ).then(
-      (results) => {
-        if (cancelled) return;
-        const ayahs = new Map<string, Ayah>();
-        const translations = new Map<string, AyahTranslationData>();
-        results.forEach(([surahAyahs, texts], i) => {
-          surahAyahs.forEach((a) => ayahs.set(ayahKey(a.surah, a.ayah), a));
-          texts.forEach((t) => translations.set(ayahKey(surahs[i], t.ayah), t));
-        });
-        setLoaded({ ayahs, translations });
-      },
-      (error: unknown) => {
-        console.error('Failed to load the session ayahs', error);
-        if (!cancelled) setFailed(true);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [repository, plan]);
+      ];
+      const results = await Promise.all(
+        surahsShown.map((surah) =>
+          Promise.all([repository.getSurah(surah, 'en'), repository.getTranslations(surah, 'en')]),
+        ),
+      );
+      const ayahs = new Map<string, Ayah>();
+      const translations = new Map<string, AyahTranslationData>();
+      results.forEach(([surahAyahs, texts], i) => {
+        surahAyahs.forEach((a) => ayahs.set(ayahKey(a.surah, a.ayah), a));
+        texts.forEach((t) => translations.set(ayahKey(surahsShown[i], t.ayah), t));
+      });
+      return { ayahs, translations };
+    },
+    [repository, plan],
+    'the session ayahs',
+  );
 
   // Review → (recap) → new ayah(s) → quiz → summary.
-  if (review === null || !loaded) {
+  if (review === null || ayahsState.status !== 'loaded') {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {failed ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load today&apos;s ayahs.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
+      <CenteredStatus
+        failed={ayahsState.status === 'failed'}
+        message="Couldn't load today's ayahs."
+      />
     );
   }
+  const loaded = ayahsState.data;
 
   if (review.length > 0 && reviewResult === null && quizContent.status === 'loaded') {
     return (
@@ -443,16 +425,8 @@ function Summary({
   onDone: () => void;
 }) {
   const colors = useColors();
-  const { events } = useEventLog();
-  const { pace } = useSettings();
   const surahs = useSurahs();
-  const now = useNow();
-  const next = useMemo(
-    () => planSession(content, events, { pace }, now),
-    [content, events, pace, now],
-  );
-  const total = useMemo(() => progress(content, events).wordsLearned, [content, events]);
-  const days = useMemo(() => streak(events, now), [events, now]);
+  const { plan: next, wordsLearned: total, streak: days } = useDailyStatus(content);
 
   return (
     <ScrollView
@@ -478,7 +452,7 @@ function Summary({
       <Text style={[styles.body, { color: colors.muted }]}>
         {next.newMaterial.length === 0
           ? 'You have finished the path.'
-          : `Next: ${surahs.status === 'loaded' ? describePassages(next.newMaterial, surahs.surahs) : '…'}`}
+          : `Next: ${surahs.status === 'loaded' ? describePassages(next.newMaterial, surahs.data) : '…'}`}
       </Text>
       {/* Offered after a session on the path, not after a review on its own. */}
       {learnedNow !== null ? <ReminderOffer /> : null}
@@ -494,7 +468,6 @@ function Summary({
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
   content: { padding: 16, gap: 12 },
   ayah: { paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   ayahHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CenteredStatus } from '../async/CenteredStatus';
 import { useNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
 import { progress, streak, type Content } from '../engine';
@@ -11,20 +12,13 @@ import { useEventLog } from '../user/UserStoreProvider';
 
 /** How far the learner has come: streak, ayahs completed, words learned and place on the path. */
 export function ProgressScreen() {
-  const colors = useColors();
   const path = usePath();
   if (path.status !== 'loaded') {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {path.status === 'failed' ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load your progress.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
+      <CenteredStatus failed={path.status === 'failed'} message="Couldn't load your progress." />
     );
   }
-  return <Progress content={path.content} />;
+  return <Progress content={path.data} />;
 }
 
 function Progress({ content }: { content: Content }) {
@@ -35,7 +29,7 @@ function Progress({ content }: { content: Content }) {
   const now = useNow();
   const days = useMemo(() => streak(events, now), [events, now]);
   const name = (surah: number) =>
-    (surahs.status === 'loaded' && surahs.surahs.find((s) => s.surah === surah)?.nameEnglish) ||
+    (surahs.status === 'loaded' && surahs.data.find((s) => s.surah === surah)?.nameEnglish) ||
     `Surah ${surah}`;
   const share = stats.pathAyahs === 0 ? 0 : stats.pathIndex / stats.pathAyahs;
 
@@ -86,7 +80,6 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, gap: 12 },
   stat: {
     flexDirection: 'row',

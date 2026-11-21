@@ -21,7 +21,7 @@ export default function SurahRoute() {
       </View>
     );
   }
-  const summary = state.status === 'loaded' ? state.surahs.find((s) => s.surah === surah) : null;
+  const summary = state.status === 'loaded' ? state.data.find((s) => s.surah === surah) : null;
   if (!summary) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
