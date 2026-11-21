@@ -15,6 +15,11 @@ export type PathAyah = {
   surah: number;
   ayah: number;
   words: { position: number; lemmas: string[] }[];
+  /**
+   * For a long ayah, the parts the content build splits it into (in order, covering every word):
+   * a session splits an ayah only between them. An ayah without parts is studied whole.
+   */
+  parts?: { fromWord: number; toWord: number }[];
 };
 
 /** What the engine plans with: the curated path in study order. */
@@ -167,7 +172,8 @@ export function chooseStart(content: Content, surah: number, now: Now): EventDra
  * Plans today's session: the next ayah(s) on the path, as many whole ayahs as fit in the pace's
  * new-lemma budget and its word limit. Lemmas already learned or marked "I know this" are not new
  * and cost nothing from the budget.
- * An ayah too long for the budget on its own is split at a word, and continued the next day.
+ * An ayah too long for the budget on its own is split between its parts, and continued from the
+ * next part the next day; a part (or an ayah without parts) is taken whole, even over the budget.
  */
 export function planSession(
   content: Content,
@@ -186,7 +192,7 @@ export function planSession(
   const position = pathPosition(path, log);
   const start = position.next;
   for (let i = start.ayah; i < path.length; i++) {
-    const { surah, ayah, words } = path[i];
+    const { surah, ayah, words, parts } = path[i];
     const rest = words.slice(i === start.ayah ? start.word : 0);
     const met = new Set(notNew);
     const introduced: NewLemma[] = [];
@@ -214,14 +220,28 @@ export function planSession(
 
     // Only the first ayah of a session is split: later ones wait whole for the next day.
     if (newMaterial.length === 0) {
+      // The rest of the ayah's parts (from where the session starts, which may be within one).
+      const partEnds = (parts ?? [])
+        .map((p) => p.toWord)
+        .filter((end) => end >= rest[0].position && end < rest[rest.length - 1].position);
+      const units: (typeof rest)[] = [];
+      let from = 0;
+      for (const end of [...partEnds, rest[rest.length - 1].position]) {
+        const to = rest.findIndex((w) => w.position === end) + 1;
+        units.push(rest.slice(from, to));
+        from = to;
+      }
       let taken = 0;
-      while (taken < rest.length && taken < wordLimit) {
-        const position = rest[taken].position;
-        const fromWord = introduced.filter((l) => l.wordRef.word === position);
-        // At least one word, even if that word alone is over budget.
-        if (taken > 0 && newLemmas.length + fromWord.length > budget) break;
-        newLemmas.push(...fromWord);
-        taken++;
+      for (const unit of units) {
+        const unitLemmas = introduced.filter((l) =>
+          unit.some((w) => w.position === l.wordRef.word),
+        );
+        // At least one part, even if that part alone is over budget.
+        const fits =
+          newLemmas.length + unitLemmas.length <= budget && taken + unit.length <= wordLimit;
+        if (taken > 0 && !fits) break;
+        newLemmas.push(...unitLemmas);
+        taken += unit.length;
       }
       newMaterial.push({
         surah,

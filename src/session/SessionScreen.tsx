@@ -9,6 +9,7 @@ import { useAyahPlayback, type AyahPlayback } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
 import type {
   Ayah,
+  AyahPart,
   AyahTranslation as AyahTranslationData,
   Word,
   WordRef,
@@ -30,10 +31,13 @@ import {
   type SessionPlan,
 } from '../engine';
 import { AyahTranslation } from '../reading/AyahTranslation';
-import { LinguisticNotes, notesFor, useLinguisticNotes } from '../reading/LinguisticNotes';
+import { notesFor, useLinguisticNotes, type NotesByAyah } from '../reading/LinguisticNotes';
+import { sessionPages, type StudyPage } from '../reading/pages';
+import { StudyPager } from '../reading/StudyPager';
+import { StudyView } from '../reading/StudyView';
 import { WordDetailSheet } from '../reading/WordDetailSheet';
 import { ReminderOffer } from '../reminder/ReminderOffer';
-import { useColors } from '../theme/colors';
+import { useColors, type Colors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { useSettings } from '../settings/SettingsContext';
 import { useEventLog } from '../user/UserStoreProvider';
@@ -62,19 +66,18 @@ export function SessionScreen({ onDone }: Props) {
 type Loaded = {
   ayahs: Map<string, Ayah>;
   translations: Map<string, AyahTranslationData>;
+  /** The parts of the path's long ayahs, to show the new material one part a screen. */
+  parts: AyahPart[];
 };
 
 const ayahKey = (surah: number, ayah: number) => `${surah}:${ayah}`;
 
 function Session({ content, onDone }: Props & { content: Content }) {
   const repository = useContent();
-  const colors = useColors();
-  const size = useQuranTextSize();
   const { events, record } = useEventLog();
   const { pace } = useSettings();
   // Planned once: marking "I know this" during the session doesn't change what is studied today.
   const [plan] = useState<SessionPlan>(() => planSession(content, events, { pace }, currentNow()));
-  const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
   const [learnedNow, setLearnedNow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   // Null until the new material is studied; then the questions, or empty if there are none.
@@ -114,18 +117,24 @@ function Session({ content, onDone }: Props & { content: Content }) {
           ),
         ),
       ];
-      const results = await Promise.all(
-        surahsShown.map((surah) =>
-          Promise.all([repository.getSurah(surah, 'en'), repository.getTranslations(surah, 'en')]),
+      const [results, parts] = await Promise.all([
+        Promise.all(
+          surahsShown.map((surah) =>
+            Promise.all([
+              repository.getSurah(surah, 'en'),
+              repository.getTranslations(surah, 'en'),
+            ]),
+          ),
         ),
-      );
+        repository.getPathParts(),
+      ]);
       const ayahs = new Map<string, Ayah>();
       const translations = new Map<string, AyahTranslationData>();
       results.forEach(([surahAyahs, texts], i) => {
         surahAyahs.forEach((a) => ayahs.set(ayahKey(a.surah, a.ayah), a));
         texts.forEach((t) => translations.set(ayahKey(surahsShown[i], t.ayah), t));
       });
-      return { ayahs, translations };
+      return { ayahs, translations, parts };
     },
     [repository, plan],
     'the session ayahs',
@@ -186,9 +195,6 @@ function Session({ content, onDone }: Props & { content: Content }) {
     );
   }
 
-  const wordAt = (ref: WordRef): Word | undefined =>
-    loaded.ayahs.get(ayahKey(ref.surah, ref.ayah))?.words.find((w) => w.position === ref.word);
-
   const toggleKnown = (lemma: NewLemma) =>
     record([
       known.has(lemma.lemmaId)
@@ -212,92 +218,185 @@ function Session({ content, onDone }: Props & { content: Content }) {
     }
   };
 
+  const quizNext =
+    quizContent.status !== 'failed' && !plan.newLemmas.every((l) => known.has(l.lemmaId));
   return (
-    <>
-      <ScrollView
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={styles.content}
-      >
-        <RecitationCredit source={audioSource} />
-        <RecitationError error={playback.error} />
-        {plan.newMaterial.map((passage) => (
-          <PassageView
-            key={ayahKey(passage.surah, passage.ayah)}
-            passage={passage}
-            loaded={loaded}
+    <NewMaterial
+      pages={sessionPages(plan.newMaterial, loaded.ayahs, loaded.parts)}
+      loaded={loaded}
+      notes={notes}
+      playback={playback}
+      newLemmas={plan.newLemmas}
+      known={known}
+      onToggleKnown={toggleKnown}
+      finishLabel={quizNext ? 'Continue to the quiz' : 'Finish session'}
+      finishDisabled={saving || quizContent.status === 'loading'}
+      onFinish={finish}
+    />
+  );
+}
+
+type NewMaterialProps = {
+  pages: StudyPage[];
+  loaded: Loaded;
+  notes: NotesByAyah;
+  playback: AyahPlayback;
+  newLemmas: NewLemma[];
+  known: Set<string>;
+  onToggleKnown: (lemma: NewLemma) => void;
+  finishLabel: string;
+  finishDisabled: boolean;
+  onFinish: () => void;
+};
+
+/**
+ * Today's new ayahs one screen each (one part a screen for a long ayah), as in Browse, with each
+ * word's card marking the lemmas new today and "I know this"; the last screen goes on to the quiz.
+ */
+function NewMaterial({
+  pages,
+  loaded,
+  notes,
+  playback,
+  newLemmas,
+  known,
+  onToggleKnown,
+  finishLabel,
+  finishDisabled,
+  onFinish,
+}: NewMaterialProps) {
+  const colors = useColors();
+  const surahs = useSurahs();
+  const [index, setIndex] = useState(0);
+  const ayahKeys = [...new Set(pages.map((p) => ayahKey(p.surah, p.ayah)))];
+  const extraData = useMemo(
+    () => ({ playback, notes, known, finishDisabled, surahs }),
+    [playback, notes, known, finishDisabled, surahs],
+  );
+
+  const describe = (page: StudyPage) => {
+    const nth = ayahKeys.indexOf(ayahKey(page.surah, page.ayah)) + 1;
+    const progress = `New ayah ${nth} of ${ayahKeys.length}`;
+    const name =
+      surahs.status === 'loaded'
+        ? surahs.data.find((s) => s.surah === page.surah)?.nameEnglish
+        : undefined;
+    const reference = `${name ?? `Surah ${page.surah}`} ${page.ayah}`;
+    const part = page.part ? ` · part ${page.part.number} of ${page.part.count}` : '';
+    return { progress, reference: reference + part };
+  };
+
+  return (
+    <StudyPager
+      pages={pages}
+      keyOf={(page) => page.key}
+      index={index}
+      onIndexChange={setIndex}
+      extraData={extraData}
+      renderPage={(page, i) => {
+        const { surah, ayah, part } = page;
+        const { progress, reference } = describe(page);
+        // Part 1, where the translation and tafsir are, if it is studied today too.
+        const first = part ? pages[i - (part.number - 1)] : undefined;
+        const firstPartToday = first?.surah === surah && first.ayah === ayah;
+        return (
+          <StudyView
+            passage={page}
+            translation={loaded.translations.get(ayahKey(surah, ayah)) ?? null}
+            notes={notesFor(notes, surah, ayah)}
             playback={playback}
-            onPressWord={setSelectedWord}
-          >
-            {(ayah) => (
-              <LinguisticNotes
-                notes={notesFor(notes, passage.surah, passage.ayah)}
-                words={ayah.words}
-              />
-            )}
-          </PassageView>
-        ))}
+            onOpenFirstPart={
+              part && firstPartToday ? () => setIndex(i - (part.number - 1)) : undefined
+            }
+            header={
+              <View style={styles.progress}>
+                <Text style={[styles.progressText, { color: colors.text }]}>{progress}</Text>
+                <Text style={[styles.reference, { color: colors.muted }]}>{reference}</Text>
+              </View>
+            }
+            renderWordExtra={(word) => {
+              const lemmas = newLemmas.filter(
+                (l) =>
+                  l.wordRef.surah === surah &&
+                  l.wordRef.ayah === ayah &&
+                  l.wordRef.word === word.position,
+              );
+              return lemmas.length > 0 ? (
+                <NewLemmas
+                  lemmas={lemmas}
+                  known={known}
+                  onToggleKnown={onToggleKnown}
+                  colors={colors}
+                />
+              ) : null;
+            }}
+            footer={
+              <>
+                <RecitationCredit source={audioSource} />
+                <RecitationError error={playback.error} />
+                {i === pages.length - 1 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={finishDisabled}
+                    onPress={onFinish}
+                    style={[
+                      styles.button,
+                      { backgroundColor: colors.accent, opacity: finishDisabled ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Text style={[styles.buttonText, { color: colors.background }]}>
+                      {finishLabel}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </>
+            }
+          />
+        );
+      }}
+    />
+  );
+}
 
-        <Text style={[styles.heading, { color: colors.text }]}>New words</Text>
-        {plan.newLemmas.length === 0 ? (
-          <Text style={{ color: colors.muted }}>You already know every word here.</Text>
-        ) : null}
-        {plan.newLemmas.map((lemma) => {
-          const word = wordAt(lemma.wordRef);
-          const isKnown = known.has(lemma.lemmaId);
-          return (
-            <View
-              key={lemma.lemmaId}
-              style={[styles.lemma, { borderColor: colors.border, opacity: isKnown ? 0.5 : 1 }]}
-            >
-              <Pressable
-                style={styles.lemmaText}
-                accessibilityRole="button"
-                accessibilityHint="Shows the word's grammar"
-                onPress={() => setSelectedWord(lemma.wordRef)}
-              >
-                <Text style={[styles.lemmaArabic, size.text(22, 40), { color: colors.text }]}>
-                  {lemma.lemmaId}
-                  {word ? `  ·  ${word.bare}` : ''}
-                </Text>
-                <Text style={{ color: colors.muted }}>{word?.gloss ?? '—'}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: isKnown }}
-                onPress={() => toggleKnown(lemma)}
-                hitSlop={8}
-                style={[styles.knowButton, { borderColor: colors.accent }]}
-              >
-                <Text style={{ color: colors.accent }}>
-                  {isKnown ? '✓ I know this' : 'I know this'}
-                </Text>
-              </Pressable>
-            </View>
-          );
-        })}
+type NewLemmasProps = {
+  lemmas: NewLemma[];
+  known: Set<string>;
+  onToggleKnown: (lemma: NewLemma) => void;
+  colors: Colors;
+};
 
-        <Pressable
-          accessibilityRole="button"
-          disabled={saving || quizContent.status === 'loading'}
-          onPress={finish}
+/** On a word's card: the lemmas it brings that are new today, each with "I know this". */
+function NewLemmas({ lemmas, known, onToggleKnown, colors }: NewLemmasProps) {
+  const size = useQuranTextSize();
+  return lemmas.map((lemma) => {
+    const isKnown = known.has(lemma.lemmaId);
+    return (
+      <View key={lemma.lemmaId} style={styles.lemma}>
+        <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+          <Text style={[styles.badgeText, { color: colors.background }]}>New</Text>
+        </View>
+        <Text
           style={[
-            styles.button,
-            {
-              backgroundColor: colors.accent,
-              opacity: saving || quizContent.status === 'loading' ? 0.6 : 1,
-            },
+            styles.lemmaArabic,
+            size.text(20, 36),
+            { color: colors.text, opacity: isKnown ? 0.5 : 1 },
           ]}
         >
-          <Text style={[styles.buttonText, { color: colors.background }]}>
-            {quizContent.status === 'failed' || plan.newLemmas.every((l) => known.has(l.lemmaId))
-              ? 'Finish session'
-              : 'Continue to the quiz'}
-          </Text>
+          {lemma.lemmaId}
+        </Text>
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityLabel={`I know ${lemma.lemmaId}`}
+          accessibilityState={{ checked: isKnown }}
+          onPress={() => onToggleKnown(lemma)}
+          hitSlop={8}
+          style={[styles.knowButton, { borderColor: colors.accent }]}
+        >
+          <Text style={{ color: colors.accent }}>{isKnown ? '✓ I know this' : 'I know this'}</Text>
         </Pressable>
-      </ScrollView>
-      <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
-    </>
-  );
+      </View>
+    );
+  });
 }
 
 type PassageWordsProps = { ayah: Ayah; passage: Passage; onPressWord: (word: Word) => void };
@@ -478,16 +577,12 @@ const styles = StyleSheet.create({
   word: { alignItems: 'center' },
   arabic: { fontFamily: QURAN_FONT_FAMILY },
   gloss: { fontSize: 13, textAlign: 'center' },
-  heading: { fontSize: 18, fontWeight: '700', marginTop: 8 },
-  lemma: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  lemmaText: { flex: 1, gap: 2 },
-  lemmaArabic: { fontFamily: QURAN_FONT_FAMILY },
+  progress: { gap: 2 },
+  progressText: { fontSize: 16, fontWeight: '700' },
+  lemma: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  badge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  badgeText: { fontSize: 12, fontWeight: '700' },
+  lemmaArabic: { flex: 1, fontFamily: QURAN_FONT_FAMILY },
   knowButton: {
     borderWidth: 1,
     borderRadius: 16,

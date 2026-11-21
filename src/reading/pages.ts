@@ -1,4 +1,5 @@
 import type { Ayah, AyahPart } from '../content/repository';
+import type { Passage } from '../engine';
 import type { Place } from './position';
 import type { StudyPassage } from './StudyView';
 
@@ -26,6 +27,26 @@ export function studyPages(ayahs: Ayah[], parts: AyahPart[]): StudyPage[] {
       words: words.filter((w) => w.position >= first.word && w.position <= last.word),
       part: { number: part, count },
     }));
+  });
+}
+
+/**
+ * A session's passages as study screens, as Browse shows them: one per ayah or part, keeping only
+ * the words studied today. `ayahs` are by "surah:ayah"; `parts` are the path's (getPathParts).
+ */
+export function sessionPages(
+  passages: Passage[],
+  ayahs: Map<string, Ayah>,
+  parts: AyahPart[],
+): StudyPage[] {
+  return passages.flatMap(({ surah, ayah, fromWord, toWord }) => {
+    const whole = ayahs.get(`${surah}:${ayah}`);
+    if (!whole) return [];
+    const ayahParts = parts.filter((p) => p.surah === surah && p.ayah === ayah);
+    return studyPages([whole], ayahParts).flatMap((page) => {
+      const words = page.words.filter((w) => w.position >= fromWord && w.position <= toWord);
+      return words.length > 0 ? [{ ...page, key: `${surah}:${page.key}`, words }] : [];
+    });
   });
 }
 
