@@ -8,13 +8,14 @@ import { RecitationBar } from '../audio/RecitationControls';
 import { audioSource } from '../audio/source';
 import { useAyahPlayback, useSurahDownload } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
-import type { Ayah, AyahTranslation, LinkedWord, SurahSummary } from '../content/repository';
+import type { AyahTranslation, LinkedWord, SurahSummary } from '../content/repository';
 import type { AyahLemmas } from '../engine';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { useEventLog } from '../user/UserStoreProvider';
 import { AddToReview } from './AddToReview';
 import { notesFor, useLinguisticNotes } from './LinguisticNotes';
+import { studyPages, type StudyPage } from './pages';
 import { describePosition } from './position';
 import { StudyPager } from './StudyPager';
 import { StudyView } from './StudyView';
@@ -25,7 +26,10 @@ type Props = {
   initialAyah?: number;
 };
 
-/** A surah one ayah per screen, each fully broken down; swipe right or press Next for the next. */
+/**
+ * A surah one ayah per screen (one part per screen for a long ayah), each fully broken down; swipe
+ * right or press Next for the next.
+ */
 export function SurahScreen({ summary, initialAyah }: Props) {
   const { surah, hasBasmala } = summary;
   const content = useContent();
@@ -36,8 +40,9 @@ export function SurahScreen({ summary, initialAyah }: Props) {
         hasBasmala ? content.getBasmala('en') : Promise.resolve(null),
         content.getTranslations(surah, 'en'),
         content.getSurahLemmas(surah),
-      ]).then(([ayahs, basmala, texts, lemmas]) => ({
-        ayahs,
+        content.getSurahParts(surah),
+      ]).then(([ayahs, basmala, texts, lemmas, parts]) => ({
+        pages: studyPages(ayahs, parts),
         basmala,
         translations: new Map(texts.map((t) => [t.ayah, t])),
         // Each ayah's lemmas, by ayah number, for adding it to review.
@@ -59,16 +64,16 @@ export function SurahScreen({ summary, initialAyah }: Props) {
 }
 
 type PagesProps = Props & {
-  ayahs: Ayah[];
+  pages: StudyPage[];
   basmala: LinkedWord[] | null;
   translations: Map<number, AyahTranslation>;
   lemmas: Map<number, AyahLemmas>;
 };
 
-function SurahPages({ summary, initialAyah, ayahs, basmala, translations, lemmas }: PagesProps) {
+function SurahPages({ summary, initialAyah, pages, basmala, translations, lemmas }: PagesProps) {
   const { surah } = summary;
   const [index, setIndex] = useState(() =>
-    Math.max(0, initialAyah ? ayahs.findIndex((a) => a.ayah === initialAyah) : 0),
+    Math.max(0, initialAyah ? pages.findIndex((p) => p.ayah === initialAyah) : 0),
   );
   const playback = useAyahPlayback(audioSource);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
@@ -79,35 +84,40 @@ function SurahPages({ summary, initialAyah, ayahs, basmala, translations, lemmas
     () => ({ playback, notes, events, download }),
     [playback, notes, events, download],
   );
-  const current = ayahs[index];
+  const current = pages[index];
 
   return (
     <>
       <Stack.Screen
         options={{
           title: current
-            ? describePosition(summary.nameEnglish, current.ayah, summary.ayahCount)
+            ? describePosition(summary.nameEnglish, current.ayah, summary.ayahCount, current.part)
             : summary.nameEnglish,
         }}
       />
       <StudyPager
-        pages={ayahs}
-        keyOf={(ayah) => String(ayah.ayah)}
+        pages={pages}
+        keyOf={(page) => page.key}
         index={index}
         onIndexChange={setIndex}
         extraData={extraData}
-        renderPage={(ayah) => {
-          const ayahLemmas = lemmas.get(ayah.ayah);
+        renderPage={(page, i) => {
+          const { ayah, part } = page;
+          const ayahLemmas = lemmas.get(ayah);
+          const firstPart = !part || part.number === 1;
+          // The ayah's own controls go after its last part.
+          const endsAyah = !part || part.number === part.count;
           return (
             <StudyView
-              passage={{ surah, ayah: ayah.ayah, words: ayah.words }}
-              translation={translations.get(ayah.ayah) ?? null}
-              notes={notesFor(notes, surah, ayah.ayah)}
+              passage={page}
+              translation={translations.get(ayah) ?? null}
+              notes={notesFor(notes, surah, ayah)}
               playback={playback}
-              header={ayah.ayah === 1 && basmala ? <Basmala words={basmala} /> : null}
+              onOpenFirstPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
+              header={ayah === 1 && firstPart && basmala ? <Basmala words={basmala} /> : null}
               footer={
                 <>
-                  {ayahLemmas ? (
+                  {ayahLemmas && endsAyah ? (
                     <AddToReview ayah={ayahLemmas} events={events} record={record} />
                   ) : null}
                   <RecitationBar source={audioSource} download={download} error={playback.error} />

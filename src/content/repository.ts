@@ -63,6 +63,42 @@ export type Segment = {
 
 export type WordDetails = Word & { ref: WordRef; segments: Segment[] };
 
+/**
+ * One part of a long ayah, split at pause marks for study: one screen in Browse and the session.
+ * Its words run from `first` to `last`; these stay stable between content versions.
+ */
+export type AyahPart = {
+  surah: number;
+  ayah: number;
+  /** 1-based. */
+  part: number;
+  /** How many parts the ayah has (at least 2: ayahs studied whole have no parts). */
+  count: number;
+  first: WordRef;
+  last: WordRef;
+};
+
+type PartRow = {
+  surah: number;
+  ayah: number;
+  part: number;
+  count: number;
+  firstWord: number;
+  lastWord: number;
+};
+
+const toPart = ({ surah, ayah, part, count, firstWord, lastWord }: PartRow): AyahPart => ({
+  surah,
+  ayah,
+  part,
+  count,
+  first: { surah, ayah, word: firstWord },
+  last: { surah, ayah, word: lastWord },
+});
+
+const PART_COLUMNS = `p.surah, p.ayah, p.part, p.first_word AS firstWord, p.last_word AS lastWord,
+  (SELECT COUNT(*) FROM ayah_parts c WHERE c.surah = p.surah AND c.ayah = p.ayah) AS count`;
+
 /** An ayah on the curated path, with the lemmas of each of its words (what the engine plans with). */
 export type PathAyah = {
   surah: number;
@@ -219,6 +255,27 @@ export function createContentRepository(db: SqlRunner) {
           ORDER BY a.ayah`,
         [language, language, surah],
       );
+    },
+
+    /** The parts of a surah's long ayahs, in order. Ayahs studied whole have none. */
+    async getSurahParts(surah: number): Promise<AyahPart[]> {
+      const rows = await db.all<PartRow>(
+        `SELECT ${PART_COLUMNS} FROM ayah_parts p WHERE p.surah = ? ORDER BY p.ayah, p.part`,
+        [surah],
+      );
+      return rows.map(toPart);
+    },
+
+    /** The parts of the long ayahs on the curated path, in path order, for the session. */
+    async getPathParts(): Promise<AyahPart[]> {
+      const rows = await db.all<PartRow>(
+        `SELECT ${PART_COLUMNS}
+           FROM path
+           JOIN ayah_parts p ON p.surah = path.surah AND p.ayah = path.ayah
+          ORDER BY path.position, p.part`,
+        [],
+      );
+      return rows.map(toPart);
     },
 
     /** A surah's linguistic notes, ayah by ayah, each ayah's own note before its word notes. */
