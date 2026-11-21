@@ -1,5 +1,8 @@
 import { useColorScheme } from 'react-native';
 
+import { useSettings } from '../settings/SettingsContext';
+import { resolveColorScheme, type ColorSchemeName } from '../settings/settings';
+
 const light = {
   background: '#fff',
   surface: '#f6f4ef',
@@ -24,6 +27,13 @@ const dark: Colors = {
   backdrop: 'rgba(0,0,0,0.6)',
 };
 
+/** The colour scheme in use: the theme setting, or the phone's when it is "system". */
+export function useColorSchemeName(): ColorSchemeName {
+  const system = useColorScheme();
+  const { theme } = useSettings();
+  return resolveColorScheme(theme, system === 'dark' || system === 'light' ? system : null);
+}
+
 export function useColors(): Colors {
-  return useColorScheme() === 'dark' ? dark : light;
+  return useColorSchemeName() === 'dark' ? dark : light;
 }

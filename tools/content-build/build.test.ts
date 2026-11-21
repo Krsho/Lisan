@@ -1,28 +1,74 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { createContentRepository } from '../../src/content/repository';
 import { buildContentDatabase } from './build';
 import { parseGlossary } from './glossary';
 import { openSqlRunner } from './nodeSqlRunner';
+import { parseNotesFile } from './notes';
 import { parseQulWordByWord } from './qul';
+import { parseQuranEncResult, readQuranEncSqlite } from './quranenc';
 
 const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf8');
 
 const nfc = <T extends { text: string }>(items: T[]) =>
   items.map((item) => ({ ...item, text: item.text.normalize('NFC') }));
 
+// QuranEnc ships Rowwad as SQLite; the fixture is an SQL dump of its rows for the sample ayahs.
+function rowwadSqlite(): string {
+  const file = join(dir, 'english_rwwad.sqlite');
+  if (!existsSync(file)) {
+    const db = new DatabaseSync(file);
+    db.exec(fixture('quranenc-english_rwwad-sample.sql'));
+    db.close();
+  }
+  return file;
+}
+
+const rowwadMeta = {
+  key: 'english_rwwad',
+  title: 'English Translation - Rowwad Translation Center',
+  url: 'https://quranenc.com/en/browse/english_rwwad',
+  version: '1.0.21',
+  fetchedAt: '2026-11-21',
+  sha256: '9ec339776c3a2bdab7dbd922d99ffd14a9e0699d62fca98741207ae73916524a',
+};
+
+// QuranEnc exposes no version for the English Mukhtasar.
+const mukhtasarMeta = {
+  key: 'english_mokhtasar',
+  title: 'Al-Mukhtasar in Interpreting the Noble Quran - English',
+  url: 'https://quranenc.com',
+  version: null,
+  fetchedAt: '2026-11-21',
+  sha256: 'abc123',
+};
+
 const sources = () => ({
-  tanzilText: fixture('tanzil-sample.txt'),
+  // Rows of KFGQPC's hafsData_v2-0.json, unmodified: Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7,
+  // 70:19, 113:1, 114:1 and 114:2.
+  quranText: fixture('kfgqpc-sample.json'),
+  translations: { en: { ...rowwadMeta, ayahs: readQuranEncSqlite(rowwadSqlite()) } },
+  // Per-surah API results, as fetched, for the same ayahs.
+  tafsirs: {
+    en: {
+      ...mukhtasarMeta,
+      ayahs: parseQuranEncResult(fixture('quranenc-english_mokhtasar-sample.json')),
+    },
+  },
+  // The corpus morphology for the same ayahs.
   morphologyText: fixture('morphology-sample.txt'),
-  // Al-Fatiha + 2:4 extract of QUL's English word-by-word file. One value (1:2:3) was given a
-  // trailing space, as several real QUL values have (e.g. 3:2:1 "Allah ").
+  // The same ayahs from QUL's English word-by-word file. One value (1:2:3) was given a trailing
+  // space, as several real QUL values have (e.g. 3:2:1 "Allah ").
   glosses: { en: parseQulWordByWord(fixture('qul-english-word-by-word-sample.json')) },
   // The real, authored glossary: the build must be able to explain every tag in the sample.
   glossary: parseGlossary(
     readFileSync(join(__dirname, '..', '..', 'content', 'glossary.json'), 'utf8'),
   ),
+  // Authored notes on Al-Fatiha in every review status: approved, draft and rejected.
+  notes: [parseNotesFile(fixture('notes-en-1-sample.json'))],
 });
 
 let dir: string;
@@ -44,26 +90,34 @@ function openSqlRunnerTracked(file: string) {
 
 function build(overrides: Partial<Parameters<typeof buildContentDatabase>[0]> = {}) {
   const outFile = join(dir, 'content.db');
-  buildContentDatabase({ ...sources(), surahs: [1], contentVersion: 1, outFile, ...overrides });
+  buildContentDatabase({ ...sources(), contentVersion: 1, outFile, ...overrides });
   return createContentRepository(openSqlRunnerTracked(outFile));
 }
 
+const withoutMorphologyFor = (prefix: string) =>
+  sources()
+    .morphologyText.split('\n')
+    .filter((line) => !line.startsWith(prefix))
+    .join('\n');
+
 describe('content build', () => {
-  it('builds Al-Fatiha word by word with English glosses', async () => {
+  it('builds Al-Fatiha word by word from the KFGQPC text with English glosses', async () => {
     const content = build();
 
     const ayahs = await content.getSurah(1, 'en');
 
     expect(ayahs).toHaveLength(7);
-    // Tanzil's text is kept verbatim, and its mark order (e.g. shadda before fatha) differs from
-    // how these literals were typed, so compare Unicode-normalized forms.
-    expect(nfc(ayahs[0].words)).toEqual([
-      { position: 1, text: 'بِسْمِ', gloss: 'In (the) name' },
+    // KFGQPC's text is kept verbatim (e.g. its small high sukun ۡ), and its mark order differs
+    // from how these literals were typed, so compare Unicode-normalized forms.
+    expect(
+      nfc(ayahs[0].words).map(({ position, text, gloss }) => ({ position, text, gloss })),
+    ).toEqual([
+      { position: 1, text: 'بِسۡمِ', gloss: 'In (the) name' },
       { position: 2, text: 'ٱللَّهِ', gloss: '(of) Allah' },
-      { position: 3, text: 'ٱلرَّحْمَٰنِ', gloss: 'the Most Gracious' },
+      { position: 3, text: 'ٱلرَّحۡمَٰنِ', gloss: 'the Most Gracious' },
       { position: 4, text: 'ٱلرَّحِيمِ', gloss: 'the Most Merciful' },
     ]);
-    expect(ayahs[6].words.map((w) => w.text)).toHaveLength(9);
+    expect(ayahs[6].words).toHaveLength(9);
   });
 
   it('uses QUL glosses without its ayah-number entries or stray whitespace', async () => {
@@ -79,8 +133,183 @@ describe('content build', () => {
     ]);
   });
 
+  it('leaves out the ayah-end glyph and the rubʿ al-ḥizb mark ۞, which are not words', async () => {
+    const content = build();
+
+    const ayahs = await content.getSurah(70, 'en');
+
+    // ۞ إِنَّ ٱلۡإِنسَٰنَ خُلِقَ هَلُوعًا ﰒ
+    expect(ayahs.map((a) => a.ayah)).toEqual([19]);
+    expect(nfc(ayahs[0].words).map((w) => w.text)).toEqual(
+      ['إِنَّ', 'ٱلۡإِنسَٰنَ', 'خُلِقَ', 'هَلُوعًا'].map((t) => t.normalize('NFC')),
+    );
+  });
+
+  it('keeps pause marks on the word as KFGQPC writes them, with a bare form without them', async () => {
+    const content = build();
+
+    const [ayah] = (await content.getSurah(2, 'en')).filter((a) => a.ayah === 2);
+
+    // ذَٰلِكَ ٱلۡكِتَٰبُ لَا رَيۡبَۛ فِيهِۛ ...: the muʿānaqa marks ۛ sit on words 4 and 5.
+    const [, , , rayba, fihi] = nfc(ayah.words);
+    expect(rayba.text).toBe('رَيۡبَۛ'.normalize('NFC'));
+    expect(rayba.bare.normalize('NFC')).toBe('رَيۡبَ'.normalize('NFC'));
+    expect(fihi.bare.normalize('NFC')).toBe('فِيهِ'.normalize('NFC'));
+    expect(ayah.words[0].bare).toBe(ayah.words[0].text);
+  });
+
+  it('shows two text tokens as one word where the corpus counts one (بَعۡدَ مَا in 2:181)', async () => {
+    const content = build();
+
+    const [ayah] = (await content.getSurah(2, 'en')).filter((a) => a.ayah === 181);
+    const word = await content.getWordDetails({ surah: 2, ayah: 181, word: 3 }, 'en');
+
+    expect(ayah.words).toHaveLength(13);
+    expect(word.text.normalize('NFC')).toBe('بَعۡدَ مَا'.normalize('NFC'));
+    expect(word.gloss).toBe('after what');
+    expect(nfc(word.segments).map((s) => s.text)).toEqual(
+      ['بَعْدَ', 'مَا'].map((t) => t.normalize('NFC')),
+    );
+    // The words after it keep their own glosses.
+    expect(ayah.words[3].gloss).toBe('he (has) heard [it]');
+    expect(ayah.words[12].gloss).toBe('All-Knowing');
+  });
+
+  it('shows one text token covering two corpus words with the segments of both (لَّوۡمَا in 15:7)', async () => {
+    const content = build();
+
+    const [ayah] = await content.getSurah(15, 'en');
+    const word = await content.getWordDetails({ surah: 15, ayah: 7, word: 1 }, 'en');
+
+    expect(ayah.words).toHaveLength(7);
+    expect(word.gloss).toBe('Why not');
+    expect(nfc(word.segments).map((s) => s.text)).toEqual(
+      ['لَّوْ', 'مَا'].map((t) => t.normalize('NFC')),
+    );
+    expect(word.segments.map((s) => s.position)).toEqual([1, 2]);
+    expect(word.segments[1].terms.map((t) => t.key)).toEqual(['particle.negative']);
+    expect(ayah.words[1].gloss).toBe('you bring to us');
+  });
+
+  it('lists the surahs with their names, ayah counts and whether a Basmala heads them', async () => {
+    const content = build();
+
+    const surahs = await content.listSurahs();
+
+    expect(surahs.map((s) => s.surah)).toEqual([1, 2, 9, 15, 70, 113, 114]);
+    expect(surahs[0]).toEqual({
+      surah: 1,
+      nameEnglish: 'Al-Fātiḥah',
+      nameArabic: 'الفَاتِحة',
+      ayahCount: 7,
+      // In Al-Fatiha the Basmala is ayah 1, not a header.
+      hasBasmala: false,
+    });
+    expect(surahs.map((s) => s.hasBasmala)).toEqual([false, true, false, true, true, true, true]);
+  });
+
+  it('orders the curated path: Al-Fatiha, then Juz’ ʿAmma from An-Nas backwards', async () => {
+    const content = build();
+
+    const path = await content.getPath();
+
+    // Only path surahs that the sample contains: 2, 9, 15 and 70 are not on the path.
+    expect(path.map((a) => `${a.surah}:${a.ayah}`)).toEqual([
+      '1:1',
+      '1:2',
+      '1:3',
+      '1:4',
+      '1:5',
+      '1:6',
+      '1:7',
+      '114:1',
+      '114:2',
+      '113:1',
+    ]);
+  });
+
+  it('lists the lemmas of every word on the path, prefixes included', async () => {
+    const content = build();
+
+    const path = await content.getPath();
+    const nas1 = path.find((a) => a.surah === 114 && a.ayah === 1)!;
+
+    // قُلۡ أَعُوذُ بِرَبِّ ٱلنَّاسِ
+    expect(nas1.words.map((w) => w.position)).toEqual([1, 2, 3, 4]);
+    expect(nas1.words[2].lemmas.map((l) => l.normalize('NFC'))).toEqual(
+      ['ب', 'رَبّ'].map((l) => l.normalize('NFC')),
+    );
+  });
+
+  it('lists the lemmas of every word of any surah, on the path or not', async () => {
+    const content = build();
+
+    const baqarah = await content.getSurahLemmas(2);
+
+    // The sample has 2:1, 2:2, 2:4 and 2:181; Al-Baqarah is not on the path.
+    expect(baqarah.map((a) => a.ayah)).toEqual([1, 2, 4, 181]);
+    const [, ayah2] = baqarah;
+    expect(ayah2.surah).toBe(2);
+    // ذَٰلِكَ ٱلْكِتَٰبُ: a suffix without a lemma adds none.
+    expect(ayah2.words.slice(0, 2).map((w) => w.lemmas.map((l) => l.normalize('NFC')))).toEqual([
+      ['ذا', 'ل'].map((l) => l.normalize('NFC')),
+      ['ال', 'كِتاب'].map((l) => l.normalize('NFC')),
+    ]);
+  });
+
+  it('gives the Basmala header the words of 1:1, linked to their details there', async () => {
+    const content = build();
+
+    const basmala = await content.getBasmala('en');
+
+    expect(basmala.map((w) => w.ref)).toEqual(
+      [1, 2, 3, 4].map((word) => ({ surah: 1, ayah: 1, word })),
+    );
+    expect(basmala[0].gloss).toBe('In (the) name');
+  });
+
+  it('counts how often each lemma occurs', async () => {
+    const content = build();
+
+    // رَحِيم occurs twice in the sample: 1:1 and 1:3.
+    const word = await content.getWordDetails({ surah: 1, ayah: 1, word: 4 }, 'en');
+    const stem = word.segments[1];
+
+    expect(stem.root).toBe('رحم');
+    expect(stem.lemmaFrequency).toBe(2);
+  });
+
+  it('samples each lemma in the first word where it stands alone, for quiz options', async () => {
+    const content = build();
+
+    const samples = await content.getLemmaSamples('en');
+    const of = (lemma: string) =>
+      samples.find((s) => s.lemmaId.normalize('NFC') === lemma.normalize('NFC'))!;
+
+    // رَبّ stands alone first in 1:2:3 (رَبِّ), then comes with بِ in 113:1 and 114:1.
+    const rabb = of('رَبّ');
+    expect(rabb).toMatchObject({ frequency: 3, partOfSpeech: 'pos.noun' });
+    expect(rabb.sample?.bare.normalize('NFC')).toBe('رَبِّ'.normalize('NFC'));
+    expect(rabb.sample?.gloss).toBe('the Lord');
+    expect(of('عَبَدَ').partOfSpeech).toBe('pos.verb');
+    // رَحِيم only ever comes with the definite article.
+    expect(of('رَحِيم')).toMatchObject({ frequency: 2, partOfSpeech: null, sample: null });
+    expect(samples).toHaveLength(new Set(samples.map((s) => s.lemmaId)).size);
+  });
+
+  it('lists every glossary term in the explanation language', async () => {
+    const content = build();
+
+    const terms = await content.listTerms('en');
+
+    expect(terms.find((t) => t.key === 'aspect.imperfect')).toMatchObject({
+      arabic: 'فعل مضارع',
+      name: expect.any(String),
+    });
+  });
+
   it('splits a word into its segments, each with its grammatical terms', async () => {
-    const content = build({ surahs: [1, 2] });
+    const content = build();
 
     // وَبِٱلْـَٔاخِرَةِ "and in the Hereafter" = وَ + بِ + ٱلْ + ءَاخِرَةِ
     const word = await content.getWordDetails({ surah: 2, ayah: 4, word: 10 }, 'en');
@@ -160,31 +389,124 @@ describe('content build', () => {
   });
 
   it('refuses to build when the text and morphology disagree on word count', () => {
-    const morphologyMissingAWord = sources()
-      .morphologyText.split('\n')
-      .filter((line) => !line.startsWith('1:4:3:'))
-      .join('\n');
-
-    expect(() => build({ morphologyText: morphologyMissingAWord })).toThrow(
+    expect(() => build({ morphologyText: withoutMorphologyFor('1:4:3:') })).toThrow(
       'Word count mismatch in 1:4',
     );
   });
 
+  it('refuses a mismatch the word alignment table does not explain', () => {
+    expect(() => build({ alignment: {} })).toThrow('Word count mismatch in 2:181');
+  });
+
+  it('refuses an alignment entry that no longer fits the text', () => {
+    expect(() =>
+      build({ alignment: { '1:2': [{ tokens: [1, 2], words: [1, 1], glosses: [1, 1] }] } }),
+    ).toThrow('Word alignment for 1:2');
+  });
+
+  it('refuses morphology for an ayah the text does not have', () => {
+    const extra = `${sources().morphologyText}\n3:1:1:1\tالٓمٓ\tP\tINL|LEM:الم`;
+
+    expect(() => build({ morphologyText: extra })).toThrow('Morphology has words for 3:1');
+  });
+
+  it('exposes its content version', async () => {
+    const content = build({ contentVersion: 7 });
+    await expect(content.getContentVersion()).resolves.toBe(7);
+  });
+
   it('leaves the previous database untouched when a build fails', async () => {
     const outFile = join(dir, 'content.db');
-    const options = { ...sources(), surahs: [1], contentVersion: 1, outFile };
+    const options = { ...sources(), contentVersion: 1, outFile };
     buildContentDatabase(options);
-    const brokenMorphology = sources()
-      .morphologyText.split('\n')
-      .filter((line) => !line.startsWith('1:4:3:'))
-      .join('\n');
 
-    expect(() => buildContentDatabase({ ...options, morphologyText: brokenMorphology })).toThrow(
-      'Word count mismatch',
-    );
+    expect(() =>
+      buildContentDatabase({ ...options, morphologyText: withoutMorphologyFor('1:4:3:') }),
+    ).toThrow('Word count mismatch');
 
     const content = createContentRepository(openSqlRunnerTracked(join(dir, 'content.db')));
     expect(await content.getSurah(1, 'en')).toHaveLength(7);
+  });
+
+  it('attaches the English translation with its footnotes and the short tafsir to each ayah', async () => {
+    const content = build();
+
+    const ayahs = await content.getTranslations(1, 'en');
+
+    expect(ayahs.map((a) => a.ayah)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(ayahs[1]).toEqual({
+      ayah: 2,
+      translation: 'All praise be to Allah[1], the Lord[2] of the worlds[3],',
+      footnotes:
+        '[1] Allah is God’s most unique name.\n' +
+        ' [2] The Arabic term "rabb" (translated as "Lord") includes all of the following meanings: "owner, master, ruler, controller, sustainer, provider, guardian and caretaker."\n' +
+        ' [3] "the worlds" means mankind, jinn, and all that exists.',
+      tafsir:
+        '2. All praise belongs to Allah with regards to His essence, attributes and actions, because He is the Creator of everything. Everything belongs to Him and He is the disposer of their affairs; blessing individuals specifically and humans in general.',
+    });
+  });
+
+  it('keeps translation and tafsir verbatim, including the tafsir’s ayah-number prefix', async () => {
+    const content = build();
+
+    const [opening] = await content.getTranslations(1, 'en');
+    const [ayah4] = (await content.getTranslations(2, 'en')).filter((a) => a.ayah === 4);
+
+    expect(opening).toMatchObject({
+      translation: 'In the name of Allah, the Most Compassionate, the Most Merciful.',
+      footnotes: null,
+    });
+    expect(opening.tafsir).toMatch(/^1\. I begin by calling on Allah, Who is Ar-Raḥmān/);
+    expect(ayah4).toMatchObject({
+      ayah: 4,
+      translation:
+        'and those who believe in what has been sent down to you [O Prophet] and in what was sent down before you[5], and in the Hereafter they believe with certainty.',
+      footnotes: '[5] i.e., the Taurāt (Torah) and the Injīl (Gospel), etc.',
+    });
+    expect(ayah4.tafsir).toMatch(/^4\. They believe in the revelation that Allah sent down/);
+  });
+
+  it('records each translation and tafsir with its source and version', async () => {
+    const content = build();
+
+    expect(await content.getEditions()).toEqual([
+      {
+        kind: 'translation',
+        language: 'en',
+        key: 'english_rwwad',
+        title: 'English Translation - Rowwad Translation Center',
+        url: 'https://quranenc.com/en/browse/english_rwwad',
+        version: '1.0.21',
+        fetchedAt: '2026-11-21',
+      },
+      {
+        kind: 'tafsir',
+        language: 'en',
+        key: 'english_mokhtasar',
+        title: 'Al-Mukhtasar in Interpreting the Noble Quran - English',
+        url: 'https://quranenc.com',
+        version: null,
+        fetchedAt: '2026-11-21',
+      },
+    ]);
+  });
+
+  it('refuses a translation that is missing an ayah', () => {
+    const { translations } = sources();
+    const without1v5 = translations.en.ayahs.filter((a) => !(a.surah === 1 && a.ayah === 5));
+
+    expect(() =>
+      build({ translations: { en: { ...translations.en, ayahs: without1v5 } } }),
+    ).toThrow('en translation english_rwwad is missing 1:5');
+  });
+
+  it('refuses a tafsir for an ayah the text does not have', () => {
+    const { tafsirs } = sources();
+    const extra = { surah: 1, ayah: 8, text: '8. ...', footnotes: null };
+
+    expect(() =>
+      build({ tafsirs: { en: { ...tafsirs.en, ayahs: [...tafsirs.en.ayahs, extra] } } }),
+    ).toThrow('en tafsir english_mokhtasar has 1:8, which is not in the text');
   });
 
   it('refuses glosses that do not line up with the words', () => {
@@ -192,6 +514,46 @@ describe('content build', () => {
 
     expect(() => build({ glosses: { en: glossForMissingWord } })).toThrow(
       'en gloss 1:4:4 has no matching word',
+    );
+  });
+
+  it('includes only approved linguistic notes, on ayahs and on words', async () => {
+    const content = build();
+
+    const notes = await content.getNotes(1, 'en');
+
+    expect(notes.map(({ ayah, word }) => ({ ayah, word }))).toEqual([
+      { ayah: 2, word: null },
+      { ayah: 2, word: 2 },
+    ]);
+    expect(notes[1].text).toBe('The prefix لِ is a preposition, so ٱللَّهِ after it is genitive.');
+  });
+
+  it('has no notes where none are approved', async () => {
+    const content = build();
+
+    expect(await content.getNotes(114, 'en')).toEqual([]);
+  });
+
+  const withNote = (surah: number, note: { ayah: number; word: number | null }) => ({
+    notes: [
+      {
+        language: 'en',
+        surah,
+        notes: [{ text: 'x', status: 'draft' as const, reviewer: null, draftedBy: null, ...note }],
+      },
+    ],
+  });
+
+  it('refuses a note on an ayah the text does not have, even a draft', () => {
+    expect(() => build(withNote(1, { ayah: 8, word: null }))).toThrow(
+      'en note on 1:8: the text has no such ayah',
+    );
+  });
+
+  it('refuses a note on a word the ayah does not have', () => {
+    expect(() => build(withNote(1, { ayah: 2, word: 5 }))).toThrow(
+      'en note on 1:2:5: the ayah has 4 words',
     );
   });
 });

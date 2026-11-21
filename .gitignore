@@ -44,3 +44,6 @@ yarn-error.*
 content/sources/
 # KFGQPC font: not redistributable until KFGQPC grants permission (fetched by content:fetch)
 assets/fonts/UthmanicHafs-v9.otf
+
+# Agent worktrees
+.claude/worktrees/
