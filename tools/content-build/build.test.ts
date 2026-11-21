@@ -46,8 +46,8 @@ const mukhtasarMeta = {
 };
 
 const sources = () => ({
-  // Rows of KFGQPC's hafsData_v2-0.json, unmodified: Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7
-  // and 70:19.
+  // Rows of KFGQPC's hafsData_v2-0.json, unmodified: Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7,
+  // 70:19, 113:1, 114:1 and 114:2.
   quranText: fixture('kfgqpc-sample.json'),
   translations: { en: { ...rowwadMeta, ayahs: readQuranEncSqlite(rowwadSqlite()) } },
   // Per-surah API results, as fetched, for the same ayahs.
@@ -193,7 +193,7 @@ describe('content build', () => {
 
     const surahs = await content.listSurahs();
 
-    expect(surahs.map((s) => s.surah)).toEqual([1, 2, 9, 15, 70]);
+    expect(surahs.map((s) => s.surah)).toEqual([1, 2, 9, 15, 70, 113, 114]);
     expect(surahs[0]).toEqual({
       surah: 1,
       nameEnglish: 'Al-Fātiḥah',
@@ -202,7 +202,38 @@ describe('content build', () => {
       // In Al-Fatiha the Basmala is ayah 1, not a header.
       hasBasmala: false,
     });
-    expect(surahs.map((s) => s.hasBasmala)).toEqual([false, true, false, true, true]);
+    expect(surahs.map((s) => s.hasBasmala)).toEqual([false, true, false, true, true, true, true]);
+  });
+
+  it('orders the curated path: Al-Fatiha, then Juz’ ʿAmma from An-Nas backwards', async () => {
+    const content = build();
+
+    const path = await content.getPath();
+
+    // Only path surahs that the sample contains: 2, 9, 15 and 70 are not on the path.
+    expect(path.map((a) => `${a.surah}:${a.ayah}`)).toEqual([
+      '1:1',
+      '1:2',
+      '1:3',
+      '1:4',
+      '1:5',
+      '1:6',
+      '1:7',
+      '114:1',
+      '114:2',
+      '113:1',
+    ]);
+  });
+
+  it('lists the lemmas of every word on the path, prefixes included', async () => {
+    const content = build();
+
+    const path = await content.getPath();
+    const nas1 = path.find((a) => a.surah === 114 && a.ayah === 1)!;
+
+    // قُلۡ أَعُوذُ بِرَبِّ ٱلنَّاسِ
+    expect(nas1.words.map((w) => w.position)).toEqual([1, 2, 3, 4]);
+    expect(nas1.words[2].lemmas.map((l) => l.normalize('NFC'))).toEqual(['ب', 'رَبّ'].map((l) => l.normalize('NFC')));
   });
 
   it('gives the Basmala header the words of 1:1, linked to their details there', async () => {

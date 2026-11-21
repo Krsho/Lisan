@@ -6,6 +6,7 @@ import { describeSegment } from './features.ts';
 import { translationsOf, type Glossary } from './glossary.ts';
 import { bareWord, parseKfgqpc, splitWords } from './kfgqpc.ts';
 import { parseMorphology, type Segment } from './morphology.ts';
+import { pathOrder } from './path.ts';
 import type { QuranEncEdition } from './quranenc.ts';
 
 /** Word glosses per language code, each keyed by `surah:ayah:word` in QUL's word numbering. */
@@ -76,6 +77,11 @@ const SCHEMA = `
     text TEXT NOT NULL, footnotes TEXT,
     PRIMARY KEY (surah, ayah, kind, language)
   ) WITHOUT ROWID;
+  -- The curated path: ayahs in study order, from position 1.
+  CREATE TABLE path (
+    position INTEGER PRIMARY KEY, surah INTEGER NOT NULL, ayah INTEGER NOT NULL,
+    UNIQUE (surah, ayah)
+  );
 `;
 
 /** Surahs that open without a Basmala header: in Al-Fatiha it is ayah 1, At-Tawbah has none. */
@@ -166,6 +172,9 @@ export function buildContentDatabase(options: BuildOptions): void {
     }
 
     for (const [lemma, frequency] of lemmaFrequency) insertLemma.run(lemma, frequency);
+
+    const insertPath = db.prepare('INSERT INTO path VALUES (?, ?, ?)');
+    pathOrder(ayahs).forEach(({ surah, ayah }, i) => insertPath.run(i + 1, surah, ayah));
 
     const surahRows = new Map<number, { english: string; arabic: string; ayahCount: number }>();
     for (const a of ayahs) {
