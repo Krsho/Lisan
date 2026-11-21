@@ -8,6 +8,7 @@ import type {
   Word,
   WordRef,
 } from '../content/repository';
+import { currentNow, useNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
 import {
   completeSession,
@@ -36,7 +37,7 @@ import { useEventLog } from '../user/UserStoreProvider';
 import { describePassages, describeStreak } from './describe';
 import { QuizScreen, type QuizResult } from './QuizScreen';
 import { useQuizContent } from './useQuizContent';
-import { currentNow, usePath } from './usePath';
+import { usePath } from './usePath';
 
 type Props = { onDone: () => void };
 
@@ -410,12 +411,13 @@ function Summary({
   const { events } = useEventLog();
   const { pace } = useSettings();
   const surahs = useSurahs();
+  const now = useNow();
   const next = useMemo(
-    () => planSession(content, events, { pace }, currentNow()),
-    [content, events, pace],
+    () => planSession(content, events, { pace }, now),
+    [content, events, pace, now],
   );
   const total = useMemo(() => progress(content, events).wordsLearned, [content, events]);
-  const days = useMemo(() => streak(events, currentNow()), [events]);
+  const days = useMemo(() => streak(events, now), [events, now]);
 
   return (
     <ScrollView

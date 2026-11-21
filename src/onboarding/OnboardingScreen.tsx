@@ -5,7 +5,8 @@ import { useSurahs } from '../content/useSurahs';
 import { chooseStart, NEW_LEMMA_BUDGET, type Content, type Pace } from '../engine';
 import { PACE_LABELS } from '../settings/pace';
 import { useUpdateSettings } from '../settings/SettingsContext';
-import { currentNow, usePath } from '../session/usePath';
+import { currentNow } from '../clock/clock';
+import { usePath } from '../session/usePath';
 import { useColors } from '../theme/colors';
 import { useEventLog } from '../user/UserStoreProvider';
 

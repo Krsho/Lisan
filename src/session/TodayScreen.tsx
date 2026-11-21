@@ -1,13 +1,14 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
 import { planSession, progress, streak, type Content } from '../engine';
 import { useSettings } from '../settings/SettingsContext';
 import { useColors } from '../theme/colors';
 import { useEventLog } from '../user/UserStoreProvider';
 import { describePassages, describeStreak } from './describe';
-import { currentNow, usePath } from './usePath';
+import { usePath } from './usePath';
 
 type Props = { onStart: () => void; onBrowse: () => void; onProgress: () => void };
 
@@ -35,12 +36,13 @@ function Today({ content, onStart, onBrowse, onProgress }: Props & { content: Co
   const { events } = useEventLog();
   const { pace } = useSettings();
   const surahs = useSurahs();
+  const now = useNow();
   const plan = useMemo(
-    () => planSession(content, events, { pace }, currentNow()),
-    [content, events, pace],
+    () => planSession(content, events, { pace }, now),
+    [content, events, pace, now],
   );
   const learned = useMemo(() => progress(content, events).wordsLearned, [content, events]);
-  const days = useMemo(() => streak(events, currentNow()), [events]);
+  const days = useMemo(() => streak(events, now), [events, now]);
   const next =
     surahs.status === 'loaded' ? describePassages(plan.newMaterial, surahs.surahs) : null;
   const finished = plan.newMaterial.length === 0;

@@ -6,7 +6,7 @@ import { gradeAnswer, type GrammarFeature, type QuizItem } from '../engine';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { useEventLog } from '../user/UserStoreProvider';
-import { currentNow } from './usePath';
+import { currentNow } from '../clock/clock';
 
 export type QuizResult = { correct: number; total: number };
 

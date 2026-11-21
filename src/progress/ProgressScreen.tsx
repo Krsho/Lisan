@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
 import { progress, streak, type Content } from '../engine';
 import { describeStreak } from '../session/describe';
-import { currentNow, usePath } from '../session/usePath';
+import { usePath } from '../session/usePath';
 import { useColors } from '../theme/colors';
 import { useEventLog } from '../user/UserStoreProvider';
 
@@ -31,7 +32,8 @@ function Progress({ content }: { content: Content }) {
   const { events } = useEventLog();
   const surahs = useSurahs();
   const stats = useMemo(() => progress(content, events), [content, events]);
-  const days = useMemo(() => streak(events, currentNow()), [events]);
+  const now = useNow();
+  const days = useMemo(() => streak(events, now), [events, now]);
   const name = (surah: number) =>
     (surahs.status === 'loaded' && surahs.surahs.find((s) => s.surah === surah)?.nameEnglish) ||
     `Surah ${surah}`;

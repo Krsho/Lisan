@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useContent } from '../content/ContentProvider';
-import type { Content, Now } from '../engine';
-
-/** The current moment on the device's clock and in its time zone, for the engine. */
-export function currentNow(): Now {
-  const date = new Date();
-  return { time: date.getTime(), utcOffsetMinutes: -date.getTimezoneOffset() };
-}
+import type { Content } from '../engine';
 
 export type PathState =
   { status: 'loading' } | { status: 'failed' } | { status: 'loaded'; content: Content };

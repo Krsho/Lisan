@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 import { addAyahToReview, type AyahLemmas, type EventDraft, type ReviewEvent } from '../engine';
-import { currentNow } from '../session/usePath';
+import { currentNow } from '../clock/clock';
 import { useColors } from '../theme/colors';
 
 type Props = {
