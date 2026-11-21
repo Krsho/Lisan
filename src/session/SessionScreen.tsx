@@ -135,6 +135,15 @@ function Session({ content, onDone }: Props & { content: Content }) {
     [repository, plan],
     'the session ayahs',
   );
+  const shown = ayahsState.status === 'loaded' ? ayahsState.data : null;
+  const recapPages = useMemo(
+    () => (shown ? sessionPages(plan.recap, shown.ayahs, shown.parts) : []),
+    [plan, shown],
+  );
+  const newPages = useMemo(
+    () => (shown ? sessionPages(plan.newMaterial, shown.ayahs, shown.parts) : []),
+    [plan, shown],
+  );
 
   // Review → (recap) → new ayah(s) → quiz → summary.
   if (review === null || ayahsState.status !== 'loaded') {
@@ -164,7 +173,7 @@ function Session({ content, onDone }: Props & { content: Content }) {
   if (plan.recap.length > 0 && !recapDone) {
     return (
       <Recap
-        pages={sessionPages(plan.recap, loaded.ayahs, loaded.parts)}
+        pages={recapPages}
         loaded={loaded}
         notes={notes}
         playback={playback}
@@ -219,7 +228,7 @@ function Session({ content, onDone }: Props & { content: Content }) {
     quizContent.status !== 'failed' && !plan.newLemmas.every((l) => known.has(l.lemmaId));
   return (
     <NewMaterial
-      pages={sessionPages(plan.newMaterial, loaded.ayahs, loaded.parts)}
+      pages={newPages}
       loaded={loaded}
       notes={notes}
       playback={playback}
@@ -273,6 +282,16 @@ function NewMaterial({
     [playback, notes, known, finishDisabled, surahs],
   );
 
+  if (pages.length === 0) {
+    return (
+      <NoPages
+        message="Couldn't load today's ayahs."
+        actionLabel={finishLabel}
+        actionDisabled={finishDisabled}
+        onAction={onFinish}
+      />
+    );
+  }
   return (
     <StudyPager
       pages={pages}
@@ -403,6 +422,34 @@ function PageHeader({ label, pages, index, surahs }: PageHeaderProps) {
   );
 }
 
+type NoPagesProps = {
+  message: string;
+  actionLabel: string;
+  actionDisabled?: boolean;
+  onAction: () => void;
+};
+
+/** A session step whose ayahs couldn't be shown (one missing from the content): still a way on. */
+function NoPages({ message, actionLabel, actionDisabled = false, onAction }: NoPagesProps) {
+  const colors = useColors();
+  return (
+    <View style={[styles.content, styles.noPages, { backgroundColor: colors.background }]}>
+      <Text style={[styles.body, { color: colors.muted }]}>{message}</Text>
+      <Pressable
+        accessibilityRole="button"
+        disabled={actionDisabled}
+        onPress={onAction}
+        style={[
+          styles.button,
+          { backgroundColor: colors.accent, opacity: actionDisabled ? 0.6 : 1 },
+        ]}
+      >
+        <Text style={[styles.buttonText, { color: colors.background }]}>{actionLabel}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 type RecapProps = {
   pages: StudyPage[];
   loaded: Loaded;
@@ -436,6 +483,15 @@ function Recap({ pages, loaded, notes, playback, onDone }: RecapProps) {
       return next;
     });
 
+  if (pages.length === 0) {
+    return (
+      <NoPages
+        message="Couldn't load the ayahs to recap."
+        actionLabel="Continue"
+        onAction={onDone}
+      />
+    );
+  }
   return (
     <StudyPager
       pages={pages}
@@ -562,6 +618,7 @@ function Summary({
 
 const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
+  noPages: { flex: 1, justifyContent: 'center' },
   reference: { fontSize: 13 },
   progress: { gap: 2 },
   progressText: { fontSize: 16, fontWeight: '700' },
