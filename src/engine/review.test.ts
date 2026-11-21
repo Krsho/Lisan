@@ -179,6 +179,19 @@ describe('the daily review', () => {
     expect(afterTenDays.newLemmas).toEqual(afterOneDay.newLemmas);
   });
 
+  it("does not bring today's quiz words back the same day, even when answered wrong", () => {
+    const today = plan([], START);
+    let log = record([], completeSession(today, [], at(START)));
+    const [missed, ...rest] = today.newLemmas.map((l) => l.lemmaId);
+    log = record(log, answer([missed], RATING.again, START + MINUTE));
+    log = record(log, answer(rest, RATING.good, START + MINUTE));
+
+    // "Keep going now", later the same day.
+    expect(plan(log, START + 2 * 60 * MINUTE).reviews).toEqual([]);
+    for (const card of lemmaCards(log).values())
+      expect(card.due).toBeGreaterThanOrEqual(START + MINUTE + DAY);
+  });
+
   it('reviews lemmas learned but never quizzed (the quiz was left early), first', () => {
     let log = session([], START, null);
     // Only the first three of ayah 1's words were answered before the learner left the quiz.

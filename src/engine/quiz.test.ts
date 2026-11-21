@@ -300,17 +300,32 @@ describe('grading quiz answers', () => {
     return lemmaCards(log).get('رَحْمٰن')!.due;
   }
 
-  it('schedules a right, fast answer days ahead and a wrong, slow one minutes ahead', () => {
-    const fast = dueAfter(item.answer, 2_000);
+  it('schedules every first answer a day or more ahead, wrong or slow sooner than right', () => {
     const good = dueAfter(item.answer, 8_000);
     const hard = dueAfter(item.answer, 30_000);
     const missed = dueAfter(wrong, 30_000);
 
-    expect(fast).toBeGreaterThanOrEqual(answeredAt.time + DAY);
-    expect(fast).toBeGreaterThan(good);
+    expect(missed).toBeGreaterThanOrEqual(answeredAt.time + DAY);
     expect(good).toBeGreaterThan(hard);
-    expect(hard).toBeGreaterThan(missed);
-    expect(missed).toBeLessThanOrEqual(answeredAt.time + 10 * MINUTE);
+    expect(hard).toBeGreaterThanOrEqual(missed);
+  });
+
+  it('schedules a right, fast first answer no further out than a good one', () => {
+    // On the day a word is learned, a quick right answer shows it was just seen, not that it is
+    // known: it is not worth a week's wait.
+    expect(dueAfter(item.answer, 2_000)).toBe(dueAfter(item.answer, 8_000));
+  });
+
+  it('schedules a right, fast answer at a later review further out than a good one', () => {
+    const dueAfterReview = (ms: number) => {
+      let log = record([], completeSession(todaysPlan(), [], at(START)));
+      log = record(log, [gradeAnswer(item, item.answer, 8_000, answeredAt)]);
+      const reviewedAt = at(lemmaCards(log).get('رَحْمٰن')!.due);
+      log = record(log, [gradeAnswer(item, item.answer, ms, reviewedAt)]);
+      return lemmaCards(log).get('رَحْمٰن')!.due;
+    };
+
+    expect(dueAfterReview(2_000)).toBeGreaterThan(dueAfterReview(8_000));
   });
 
   it('gives a lemma one card, whatever word forms it is asked in', () => {

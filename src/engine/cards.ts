@@ -8,7 +8,7 @@ import {
 } from 'ts-fsrs/middlewares';
 import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6';
 
-import { chronological, type ReviewEvent, type WordRef } from './events';
+import { chronological, RATING, type ReviewEvent, type WordRef } from './events';
 
 // FSRS-6 with its default weights, built synchronously (DefaultScheduler loads the model with a
 // dynamic import). Fuzz is off, so replaying the same log gives the same schedule on every device.
@@ -22,7 +22,8 @@ const scheduler = defineScheduler({ model: FSRS6Model, chrono: dateChrono })
     // The config type is generic; ts-fsrs validates it when the scheduler is created.
     config: {
       weights: FSRS6_DEFAULT_WEIGHTS,
-      enableShortTerm: true,
+      // A once-a-day app: no same-day learning steps, so every answer schedules a day or more out.
+      enableShortTerm: false,
       numRelearningSteps: 1,
       fractionalDays: false,
       desiredRetention: 0.9,
@@ -102,8 +103,15 @@ export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
     const now = new Date(event.timestamp);
     // Cards are keyed by lemma here. ts-fsrs only gives cards ids of its own (with crypto, which
     // Hermes lacks) in its fuzzing middleware, which is not used.
-    const current = cards.get(event.lemmaId) ?? scheduler.newCard({ now });
-    const { card } = scheduler.review({ card: current, grade: event.rating as Grade, now });
+    const current = cards.get(event.lemmaId);
+    // A card's first answer (usually the quiz on the day it was learned) counts as good at best:
+    // a quick right answer then shows the word was just seen, not that it is known.
+    const grade = current ? event.rating : Math.min(event.rating, RATING.good);
+    const { card } = scheduler.review({
+      card: current ?? scheduler.newCard({ now }),
+      grade: grade as Grade,
+      now,
+    });
     cards.set(event.lemmaId, card);
   }
 
