@@ -12,7 +12,7 @@ import {
 import { useContent } from '../content/ContentProvider';
 import type { Segment, Term, WordDetails, WordRef } from '../content/repository';
 import { useColors, type Colors } from '../theme/colors';
-import { QURAN_FONT_FAMILY } from '../theme/quranFont';
+import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 
 type Props = { wordRef: WordRef | null; onClose: () => void };
 
@@ -47,6 +47,7 @@ export function WordDetailSheet({ wordRef, onClose }: Props) {
 
 function WordDetailContent({ wordRef, colors }: { wordRef: WordRef; colors: Colors }) {
   const content = useContent();
+  const size = useQuranTextSize();
   const [details, setDetails] = useState<WordDetails | null>(null);
   const [concepts, setConcepts] = useState<Concepts | null>(null);
   const [failed, setFailed] = useState(false);
@@ -90,7 +91,7 @@ function WordDetailContent({ wordRef, colors }: { wordRef: WordRef; colors: Colo
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={[styles.word, { color: colors.text }]}>{details.text}</Text>
+      <Text style={[styles.word, size.text(40, 72), { color: colors.text }]}>{details.text}</Text>
       <Text style={[styles.gloss, { color: colors.muted }]}>{details.gloss ?? '—'}</Text>
       {details.segments.map((segment) => (
         <SegmentCard
@@ -115,6 +116,7 @@ type SegmentCardProps = {
 };
 
 function SegmentCard({ segment, concepts, colors, openTerm, onToggleTerm }: SegmentCardProps) {
+  const size = useQuranTextSize();
   // Term chips are identified per segment, so the same term can be opened under one segment only.
   const id = (key: string) => `${segment.position}:${key}`;
   const chip = (term: Term, value?: string) => (
@@ -133,7 +135,9 @@ function SegmentCard({ segment, concepts, colors, openTerm, onToggleTerm }: Segm
 
   return (
     <View style={[styles.segment, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.segmentText, { color: colors.text }]}>{segment.text}</Text>
+      <Text style={[styles.segmentText, size.text(30, 54), { color: colors.text }]}>
+        {segment.text}
+      </Text>
       <View style={styles.chips}>
         {segment.terms.map((term) => chip(term))}
         {segment.lemma ? chip(concepts.lemma, segment.lemma) : null}
@@ -187,10 +191,11 @@ const styles = StyleSheet.create({
   handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginVertical: 8 },
   loading: { padding: 32, alignItems: 'center' },
   content: { paddingHorizontal: 16, paddingBottom: 16, gap: 12 },
-  word: { fontFamily: QURAN_FONT_FAMILY, fontSize: 40, lineHeight: 72, textAlign: 'center' },
+  // Quran text sizes come from the font size setting (useQuranTextSize).
+  word: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'center' },
   gloss: { fontSize: 16, textAlign: 'center', marginTop: -8 },
   segment: { borderRadius: 12, padding: 12, gap: 8 },
-  segmentText: { fontFamily: QURAN_FONT_FAMILY, fontSize: 30, lineHeight: 54, textAlign: 'right' },
+  segmentText: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'right' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     flexDirection: 'row',

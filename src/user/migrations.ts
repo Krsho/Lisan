@@ -27,6 +27,14 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX review_events_lemma ON review_events (lemma_id, timestamp);
   CREATE INDEX review_events_timestamp ON review_events (timestamp);
   `,
+  // 2: settings, one row per setting with its value as JSON (src/settings/settings.ts).
+  `
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  ) STRICT;
+  `,
 ];
 
 /** Brings the database up to the latest schema. Each step commits on its own, with its version. */
