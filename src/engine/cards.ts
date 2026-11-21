@@ -51,65 +51,104 @@ export type LemmaCard = {
   /** When the card is next due, in epoch milliseconds. */
   due: number;
   state: CardState;
-  /** How many reviews (quiz answers included) it has had. */
+  /** How many reviews (quiz answers included) it has had; 0 for a new card. */
   reps: number;
   /** How many times it was forgotten after being learned. */
   lapses: number;
   stability: number;
   difficulty: number;
-  /** When it was last reviewed, in epoch milliseconds; for a card never reviewed, when it is due. */
-  lastReview: number;
+  /** When it was last reviewed, in epoch milliseconds; null if it never was. */
+  lastReview: number | null;
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
- * Every lemma's card, derived by replaying the log's review events through FSRS in order. Only
- * reviewed lemmas, and lemmas added to review from a browsed ayah (new cards, due when added),
- * have a card; cards are never stored, so merged logs reschedule consistently.
+ * Whether an event puts its lemma in the review deck. Every lemma event does (learned in a
+ * session, answered in a quiz or review, or added to review some other way), except "I know this"
+ * and taking it back, which say nothing about having learned the lemma.
+ */
+export function entersReview(
+  event: ReviewEvent,
+): event is Extract<ReviewEvent, { lemmaId: string }> {
+  return event.lemmaId !== null && event.kind !== 'known' && event.kind !== 'known-undone';
+}
+
+/**
+ * Every lemma's card, derived by replaying the log's review events through FSRS in order. A lemma
+ * in the deck with no review yet (learned, but the quiz was left before its question; or added to
+ * review) has a new card, due from when it entered the deck, so it is never silently lost. Lemmas
+ * marked "I know this" keep their card here; the session leaves them out. Cards are never stored,
+ * so merged logs reschedule consistently.
  */
 export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
   const ordered = chronological(log);
-  const learnedAt = new Map<string, WordRef>();
+  // When each lemma entered the deck, and the word form its card shows: where the lemma was first
+  // met (learned or added), or else where it was first asked.
+  const entered = new Map<string, { wordRef: WordRef; timestamp: number; met: boolean }>();
   for (const event of ordered) {
-    if (event.kind === 'learn' && !learnedAt.has(event.lemmaId)) {
-      learnedAt.set(event.lemmaId, event.wordRef);
+    if (!entersReview(event)) continue;
+    const met = event.kind !== 'review';
+    const first = entered.get(event.lemmaId);
+    if (!first) {
+      entered.set(event.lemmaId, { wordRef: event.wordRef, timestamp: event.timestamp, met });
+    } else if (met && !first.met) {
+      entered.set(event.lemmaId, { ...first, wordRef: event.wordRef, met });
     }
   }
-  const cards = new Map<string, { card: FsrsCard; wordRef: WordRef }>();
+  const cards = new Map<string, FsrsCard>();
   for (const event of ordered) {
-    if (event.kind === 'added') {
-      // A browsed ayah's lemma starts as a new card, due at once, unless it already has one.
-      if (!cards.has(event.lemmaId))
-        cards.set(event.lemmaId, {
-          card: scheduler.newCard({ now: new Date(event.timestamp) }),
-          wordRef: event.wordRef,
-        });
-      continue;
-    }
     if (event.kind !== 'review') continue;
     const now = new Date(event.timestamp);
     // Cards are keyed by lemma here. ts-fsrs only gives cards ids of its own (with crypto, which
     // Hermes lacks) in its fuzzing middleware, which is not used.
-    const current = cards.get(event.lemmaId)?.card ?? scheduler.newCard({ now });
+    const current = cards.get(event.lemmaId) ?? scheduler.newCard({ now });
     const { card } = scheduler.review({ card: current, grade: event.rating as Grade, now });
-    cards.set(event.lemmaId, {
-      card,
-      wordRef: cards.get(event.lemmaId)?.wordRef ?? learnedAt.get(event.lemmaId) ?? event.wordRef,
-    });
+    cards.set(event.lemmaId, card);
   }
 
   const result = new Map<string, LemmaCard>();
-  for (const [lemmaId, { card, wordRef }] of cards) {
-    result.set(lemmaId, {
+  for (const [lemmaId, { wordRef, timestamp }] of entered) {
+    const card = cards.get(lemmaId);
+    result.set(
       lemmaId,
-      wordRef,
-      due: card.dueAt.getTime(),
-      state: STATES[card.state],
-      reps: card.reps,
-      lapses: card.lapses,
-      stability: card.stability,
-      difficulty: card.difficulty,
-      lastReview: card.lastReviewAt?.getTime() ?? card.dueAt.getTime(),
-    });
+      card
+        ? {
+            lemmaId,
+            wordRef,
+            due: card.dueAt.getTime(),
+            state: STATES[card.state],
+            reps: card.reps,
+            lapses: card.lapses,
+            stability: card.stability,
+            difficulty: card.difficulty,
+            lastReview: card.lastReviewAt?.getTime() ?? null,
+          }
+        : {
+            lemmaId,
+            wordRef,
+            due: timestamp,
+            state: 'new',
+            reps: 0,
+            lapses: 0,
+            stability: 0,
+            difficulty: 0,
+            lastReview: null,
+          },
+    );
   }
   return result;
+}
+
+/**
+ * How likely (0 to 1) the learner still recalls the card's lemma at `time`, by FSRS's forgetting
+ * curve. A card never reviewed has never been recalled, so it is 0.
+ */
+export function retrievability(card: LemmaCard, time: number): number {
+  if (card.lastReview === null || card.stability <= 0) return 0;
+  const elapsedDays = Math.max(0, time - card.lastReview) / DAY_MS;
+  return scheduler.model.forgettingCurve(
+    { stability: card.stability, difficulty: card.difficulty } as never,
+    elapsedDays,
+  );
 }

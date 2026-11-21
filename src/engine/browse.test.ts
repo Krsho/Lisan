@@ -125,6 +125,9 @@ describe('adding a browsed ayah to review', () => {
 
     const log = record([], addAyahToReview(kursi, [], at(START)));
 
-    expect(planSession(path, log, DEFAULT_SETTINGS, at(START + DAY))).toEqual(before);
+    // Only the review changes: the added lemmas are due in it.
+    const after = planSession(path, log, DEFAULT_SETTINGS, at(START + DAY));
+    expect({ ...after, reviews: before.reviews }).toEqual(before);
+    expect(after.reviews.map((r) => r.lemmaId)).toContain('hayy');
   });
 });

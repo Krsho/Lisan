@@ -54,6 +54,17 @@ function Today({ content, onStart, onBrowse }: Props & { content: Content }) {
             <Text style={[styles.body, { color: colors.muted }]}>
               You have studied every ayah on the path. Keep exploring the whole Quran.
             </Text>
+            {plan.reviews.length > 0 ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onStart}
+                style={[styles.button, { backgroundColor: colors.accent }]}
+              >
+                <Text style={[styles.buttonText, { color: colors.background }]}>
+                  Review your words
+                </Text>
+              </Pressable>
+            ) : null}
           </>
         ) : plan.completedToday ? (
           <>
@@ -68,6 +79,8 @@ function Today({ content, onStart, onBrowse }: Props & { content: Content }) {
             <Text style={[styles.title, { color: colors.text }]}>Today&apos;s session</Text>
             <Text style={[styles.body, { color: colors.text }]}>{next ?? '…'}</Text>
             <Text style={[styles.body, { color: colors.muted }]}>
+              {/* How many reviews wait is never shown, so missed days don't look like a backlog. */}
+              {plan.reviews.length > 0 ? 'A short review, then ' : ''}
               {plan.newLemmas.length} new {plan.newLemmas.length === 1 ? 'word' : 'words'}
             </Text>
             <Pressable

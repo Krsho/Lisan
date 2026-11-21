@@ -6,6 +6,7 @@ import {
   type ReviewEvent,
   type WordRef,
 } from './events';
+import { lemmaCards } from './cards';
 import { knownLemmas, type Now, type SessionPlan } from './session';
 
 /** One morphological piece of a word, with its glossary term keys (e.g. "case.genitive"). */
@@ -274,12 +275,42 @@ const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
  * come from lemmas of the same part of speech and a similar frequency.
  */
 export function planQuiz(plan: SessionPlan, log: ReviewEvent[], content: QuizContent): QuizItem[] {
-  const known = knownLemmas(log);
+  // Types take turns along the quiz.
+  return questionsFor(plan.newLemmas, knownLemmas(log), content, (_, index) => index);
+}
+
+/**
+ * The review at the start of the session: one question per card to review, about the word form
+ * the card shows, built like the quiz's (and graded the same, with gradeAnswer). The question type
+ * moves on with each review of a card, so a lemma is asked about in turn by meaning, by Arabic word
+ * and by grammar. Cards marked "I know this" since the session was planned are left out.
+ */
+export function planReview(
+  plan: SessionPlan,
+  log: ReviewEvent[],
+  content: QuizContent,
+): QuizItem[] {
+  const cards = lemmaCards(log);
+  return questionsFor(
+    plan.reviews,
+    knownLemmas(log),
+    content,
+    (lemmaId) => hash(lemmaId) + (cards.get(lemmaId)?.reps ?? 0),
+  );
+}
+
+function questionsFor(
+  targets: { lemmaId: string; wordRef: WordRef }[],
+  known: Set<string>,
+  content: QuizContent,
+  /** Which question type to try first for a lemma (an index into QUIZ_TYPES, wrapped). */
+  firstType: (lemmaId: string, index: number) => number,
+): QuizItem[] {
   const words = new Map(content.words.map((w) => [refKey(w.ref), w]));
   const entries = new Map(content.lemmas.map((e) => [e.lemmaId, e]));
   const items: QuizItem[] = [];
 
-  for (const { lemmaId, wordRef } of plan.newLemmas) {
+  for (const { lemmaId, wordRef } of targets) {
     if (known.has(lemmaId)) continue;
     const word = words.get(refKey(wordRef));
     const segment = word?.segments.find((s) => s.lemma === lemmaId);
@@ -304,7 +335,7 @@ export function planQuiz(plan: SessionPlan, log: ReviewEvent[], content: QuizCon
             ? meaningItem(target, content.lemmas, exclude)
             : arabicItem(target, content.lemmas, exclude);
 
-    const first = items.length % QUIZ_TYPES.length;
+    const first = firstType(lemmaId, items.length) % QUIZ_TYPES.length;
     for (let k = 0; k < QUIZ_TYPES.length; k++) {
       const item = build(QUIZ_TYPES[(first + k) % QUIZ_TYPES.length]);
       if (item) {

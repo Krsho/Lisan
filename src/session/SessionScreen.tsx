@@ -16,6 +16,7 @@ import {
   learnedLemmas,
   markKnown,
   planQuiz,
+  planReview,
   planSession,
   undoKnown,
   type Content,
@@ -37,7 +38,10 @@ import { currentNow, usePath } from './usePath';
 
 type Props = { onDone: () => void };
 
-/** Today's session: study the new ayah(s), a quiz on their new words, then a summary. */
+/**
+ * Today's session: a review of earlier words, a recap after a week or more away, the new ayah(s),
+ * a quiz on their new words, then a summary.
+ */
 export function SessionScreen({ onDone }: Props) {
   const colors = useColors();
   const path = usePath();
@@ -80,15 +84,37 @@ function Session({ content, onDone }: Props & { content: Content }) {
   // Null until the new material is studied; then the questions, or empty if there are none.
   const [quiz, setQuiz] = useState<QuizItem[] | null>(null);
   const [quizResult, setQuizResult] = useState<QuizResult | null>(null);
+  // The log as the session began, so the review's questions stay the same as answers come in.
+  const [startEvents] = useState(events);
+  const [reviewResult, setReviewResult] = useState<QuizResult | null>(null);
+  const [recapDone, setRecapDone] = useState(false);
   const known = useMemo(() => knownLemmas(events), [events]);
-  const surahs = useMemo(() => [...new Set(plan.newMaterial.map((p) => p.surah))], [plan]);
+  const surahs = useMemo(
+    () => [...new Set([...plan.recap, ...plan.newMaterial].map((p) => p.surah))],
+    [plan],
+  );
   const notes = useLinguisticNotes(surahs, 'en');
-  // Loaded while the learner studies, so the quiz is ready when they finish.
-  const quizContent = useQuizContent(plan.newLemmas);
+  // The words of the review and the quiz, loaded together so the quiz is ready after studying.
+  const asked = useMemo(() => [...plan.reviews, ...plan.newLemmas], [plan]);
+  const quizContent = useQuizContent(asked);
+
+  // The review's questions: null while their content loads. Without the content (it failed to
+  // load) the session goes on without a review.
+  const review = useMemo(() => {
+    if (plan.reviews.length === 0 || quizContent.status === 'failed') return [];
+    if (quizContent.status === 'loading') return null;
+    return planReview(plan, startEvents, quizContent.data);
+  }, [plan, startEvents, quizContent]);
 
   useEffect(() => {
     let cancelled = false;
-    const surahs = [...new Set(plan.newMaterial.map((p) => p.surah))];
+    const surahs = [
+      ...new Set(
+        [...plan.reviews.map((r) => r.wordRef), ...plan.recap, ...plan.newMaterial].map(
+          (p) => p.surah,
+        ),
+      ),
+    ];
     Promise.all(
       surahs.map((surah) =>
         Promise.all([repository.getSurah(surah, 'en'), repository.getTranslations(surah, 'en')]),
@@ -114,19 +140,8 @@ function Session({ content, onDone }: Props & { content: Content }) {
     };
   }, [repository, plan]);
 
-  if (learnedNow !== null && quiz !== null && quiz.length > 0 && quizResult === null) {
-    return quizContent.status === 'loaded' ? (
-      <QuizScreen items={quiz} terms={quizContent.data.terms} onDone={setQuizResult} />
-    ) : null;
-  }
-
-  if (learnedNow !== null && quiz !== null) {
-    return (
-      <Summary content={content} learnedNow={learnedNow} quizResult={quizResult} onDone={onDone} />
-    );
-  }
-
-  if (!loaded) {
+  // Review → (recap) → new ayah(s) → quiz → summary.
+  if (review === null || !loaded) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         {failed ? (
@@ -138,11 +153,40 @@ function Session({ content, onDone }: Props & { content: Content }) {
     );
   }
 
-  if (plan.newMaterial.length === 0) {
+  if (review.length > 0 && reviewResult === null && quizContent.status === 'loaded') {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>There is no new material left on the path.</Text>
-      </View>
+      <QuizScreen
+        key="review"
+        title="Review"
+        doneLabel="Continue"
+        items={review}
+        terms={quizContent.data.terms}
+        context={loaded.ayahs}
+        onDone={setReviewResult}
+      />
+    );
+  }
+
+  if (plan.recap.length > 0 && !recapDone) {
+    return <Recap passages={plan.recap} loaded={loaded} onDone={() => setRecapDone(true)} />;
+  }
+
+  if (learnedNow !== null && quiz !== null && quiz.length > 0 && quizResult === null) {
+    return quizContent.status === 'loaded' ? (
+      <QuizScreen key="quiz" items={quiz} terms={quizContent.data.terms} onDone={setQuizResult} />
+    ) : null;
+  }
+
+  // With the path finished, a session is the review alone.
+  if ((learnedNow !== null && quiz !== null) || plan.newMaterial.length === 0) {
+    return (
+      <Summary
+        content={content}
+        learnedNow={learnedNow ?? 0}
+        reviewResult={reviewResult}
+        quizResult={quizResult}
+        onDone={onDone}
+      />
     );
   }
 
@@ -297,14 +341,67 @@ function PassageWords({ ayah, passage, onPressWord }: PassageWordsProps) {
   );
 }
 
+type RecapProps = { passages: Passage[]; loaded: Loaded; onDone: () => void };
+
+/** After a gap of a week or more: the last few ayahs studied, to read again before going on. */
+function Recap({ passages, loaded, onDone }: RecapProps) {
+  const colors = useColors();
+  const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
+  return (
+    <>
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={styles.content}
+      >
+        <Text style={[styles.title, { color: colors.text }]}>Welcome back</Text>
+        <Text style={[styles.body, { color: colors.muted }]}>
+          Here are the last ayahs you studied, to pick up where you left off.
+        </Text>
+        {passages.map((passage) => {
+          const ayah = loaded.ayahs.get(ayahKey(passage.surah, passage.ayah));
+          const translation = loaded.translations.get(ayahKey(passage.surah, passage.ayah));
+          return ayah ? (
+            <View
+              key={ayahKey(passage.surah, passage.ayah)}
+              style={[styles.ayah, { borderColor: colors.border }]}
+            >
+              <Text style={[styles.reference, { color: colors.muted }]}>
+                {passage.surah}:{passage.ayah}
+              </Text>
+              <PassageWords
+                ayah={ayah}
+                passage={passage}
+                onPressWord={(word) =>
+                  setSelectedWord({ surah: ayah.surah, ayah: ayah.ayah, word: word.position })
+                }
+              />
+              {translation ? <AyahTranslation data={translation} /> : null}
+            </View>
+          ) : null;
+        })}
+        <Pressable
+          accessibilityRole="button"
+          onPress={onDone}
+          style={[styles.button, { backgroundColor: colors.accent }]}
+        >
+          <Text style={[styles.buttonText, { color: colors.background }]}>Continue</Text>
+        </Pressable>
+      </ScrollView>
+      <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
+    </>
+  );
+}
+
 function Summary({
   content,
   learnedNow,
+  reviewResult,
   quizResult,
   onDone,
 }: {
   content: Content;
   learnedNow: number;
+  reviewResult: QuizResult | null;
   quizResult: QuizResult | null;
   onDone: () => void;
 }) {
@@ -323,6 +420,11 @@ function Summary({
       contentContainerStyle={styles.content}
     >
       <Text style={[styles.title, { color: colors.text }]}>Session complete</Text>
+      {reviewResult ? (
+        <Text style={[styles.body, { color: colors.text }]}>
+          Review: {reviewResult.correct} of {reviewResult.total} right
+        </Text>
+      ) : null}
       <Text style={[styles.body, { color: colors.text }]}>New words today: {learnedNow}</Text>
       {quizResult ? (
         <Text style={[styles.body, { color: colors.text }]}>

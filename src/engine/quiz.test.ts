@@ -155,6 +155,8 @@ const todaysPlan = (log: ReviewEvent[] = []) =>
 
 /** A plan that introduces just these lemmas, each in the word it is listed with. */
 const planOf = (...entries: [string, number, number][]): SessionPlan => ({
+  reviews: [],
+  recap: [],
   newMaterial: [],
   newLemmas: entries.map(([lemmaId, ayah, word]) => ({
     lemmaId,
@@ -340,8 +342,19 @@ describe('grading quiz answers', () => {
     expect(lemmaCards(log).get('رَحْمٰن')).toMatchObject({ reps: 3, lapses: 1 });
   });
 
-  it('has no card for a lemma that was never reviewed', () => {
+  it('gives a learned lemma never quizzed a new card, due from when it was learned', () => {
     const log = record([], completeSession(todaysPlan(), [], at(START)));
+
+    expect(lemmaCards(log).get('رَحْمٰن')).toMatchObject({
+      state: 'new',
+      reps: 0,
+      due: START,
+      wordRef: { surah: 1, ayah: 1, word: 3 },
+    });
+  });
+
+  it('has no card for a lemma only marked "I know this"', () => {
+    const log = record([], [markKnown('اللَّه', { surah: 1, ayah: 1, word: 2 }, at(START))]);
 
     expect(lemmaCards(log).size).toBe(0);
   });
