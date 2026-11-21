@@ -2,6 +2,7 @@ import {
   completeSession,
   markKnown,
   planSession,
+  SESSION_WORD_LIMIT,
   streak,
   undoKnown,
   type EventDraft,
@@ -149,6 +150,31 @@ describe('the daily new-ayah session', () => {
     expect(budget('light')).toBeLessThan(budget('normal'));
     expect(budget('normal')).toBe(15);
     expect(budget('intense')).toBeGreaterThan(budget('normal'));
+  });
+
+  it('keeps a session short through ayahs whose words are all known', () => {
+    // Thirty ayahs of five words, every lemma already marked "I know this": none is new, so the
+    // budget of new lemmas alone would put the whole path in one session.
+    const known = { path: Array.from({ length: 30 }, (_, i) => ayahOfNewWords(3, i + 1, 5, 'k')) };
+    const log = record(
+      [],
+      [1, 2, 3, 4, 5].map((i) => markKnown(`k${i}`, { surah: 3, ayah: 1, word: i }, at(START))),
+    );
+
+    const plan = planSession(known, log, normal, at(START + 1000));
+
+    const words = plan.newMaterial.reduce((n, p) => n + p.toWord - p.fromWord + 1, 0);
+    expect(words).toBe(SESSION_WORD_LIMIT.normal);
+    expect(plan.newMaterial[0]).toMatchObject({ ayah: 1, fromWord: 1 });
+  });
+
+  it('splits a long ayah of known words at the session word limit', () => {
+    const long = { path: [ayah(2, 282, ...Array.from({ length: 100 }, () => ['known']))] };
+    const log = record([], [markKnown('known', { surah: 2, ayah: 282, word: 1 }, at(START))]);
+
+    const plan = planSession(long, log, normal, at(START + 1000));
+
+    expect(passages(plan)).toEqual([`2:282:1-${SESSION_WORD_LIMIT.normal}`]);
   });
 
   it('has no new material once the path is finished', () => {

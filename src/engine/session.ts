@@ -23,6 +23,13 @@ export const DEFAULT_SETTINGS: Settings = { pace: 'normal' };
 /** How many new lemmas a session introduces at each pace. */
 export const NEW_LEMMA_BUDGET: Record<Pace, number> = { light: 10, normal: 15, intense: 25 };
 
+/**
+ * At most this many words are studied in a session, at each pace (three times its new-lemma
+ * budget), so that a run of ayahs whose words are all learned or known, which cost nothing from
+ * the budget, still makes a session of about the usual length.
+ */
+export const SESSION_WORD_LIMIT: Record<Pace, number> = { light: 30, normal: 45, intense: 75 };
+
 /** Words `fromWord` to `toWord` (inclusive) of one ayah, studied as new material. */
 export type Passage = {
   surah: number;
@@ -162,7 +169,8 @@ export function chooseStart(content: Content, surah: number, now: Now): EventDra
 
 /**
  * Plans today's session: the next ayah(s) on the path, as many whole ayahs as fit in the pace's
- * new-lemma budget. Lemmas already learned or marked "I know this" are not new and cost nothing.
+ * new-lemma budget and its word limit. Lemmas already learned or marked "I know this" are not new
+ * and cost nothing from the budget.
  * An ayah too long for the budget on its own is split at a word, and continued the next day.
  */
 export function planSession(
@@ -172,6 +180,8 @@ export function planSession(
   now: Now,
 ): SessionPlan {
   const budget = NEW_LEMMA_BUDGET[settings.pace];
+  const wordLimit = SESSION_WORD_LIMIT[settings.pace];
+  let studiedWords = 0;
   const { path } = content;
   const notNew = new Set([...learnedLemmas(log), ...knownLemmas(log)]);
   const newMaterial: Passage[] = [];
@@ -192,7 +202,10 @@ export function planSession(
       }
     }
 
-    if (newLemmas.length + introduced.length <= budget) {
+    if (
+      newLemmas.length + introduced.length <= budget &&
+      studiedWords + rest.length <= wordLimit
+    ) {
       newMaterial.push({
         surah,
         ayah,
@@ -202,13 +215,14 @@ export function planSession(
       });
       newLemmas.push(...introduced);
       introduced.forEach((l) => notNew.add(l.lemmaId));
+      studiedWords += rest.length;
       continue;
     }
 
     // Only the first ayah of a session is split: later ones wait whole for the next day.
     if (newMaterial.length === 0) {
       let taken = 0;
-      while (taken < rest.length) {
+      while (taken < rest.length && taken < wordLimit) {
         const position = rest[taken].position;
         const fromWord = introduced.filter((l) => l.wordRef.word === position);
         // At least one word, even if that word alone is over budget.
