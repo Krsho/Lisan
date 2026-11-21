@@ -8,20 +8,9 @@ import { useColors, type Colors } from '../theme/colors';
 type Props = { data: AyahTranslationData };
 
 /**
- * An ayah's full translation with its footnotes, and its short tafsir. Each starts open or closed
- * as the settings say, until the learner toggles it. Both are shown exactly as QuranEnc publishes
- * them, so the tafsir keeps its "N. " prefix.
+ * An ayah's full translation and its footnotes, open or closed as the settings say until toggled.
+ * Shown exactly as QuranEnc publishes it, as is the tafsir, which keeps its "N. " prefix.
  */
-export function AyahTranslation({ data }: Props) {
-  return (
-    <View style={styles.container}>
-      <TranslationSection data={data} />
-      <TafsirSection data={data} />
-    </View>
-  );
-}
-
-/** The translation and its footnotes, open or closed as the settings say until toggled. */
 export function TranslationSection({ data }: Props) {
   const colors = useColors();
   const { showTranslation } = useSettings();
@@ -97,7 +86,6 @@ function Toggle({ label, expanded, colors, onPress }: ToggleProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 12, gap: 8 },
   section: { gap: 8 },
   translation: { fontSize: 16, lineHeight: 24 },
   footnotes: { fontSize: 13, lineHeight: 19 },

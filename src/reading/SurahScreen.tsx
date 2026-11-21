@@ -139,7 +139,7 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
               translation={translations.get(ayah) ?? null}
               notes={notesFor(notes, surah, ayah)}
               playback={playback}
-              onOpenFirstPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
+              onOpenTranslationPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
               header={ayah === 1 && firstPart && basmala ? <Basmala words={basmala} /> : null}
               footer={
                 <>
