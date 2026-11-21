@@ -1,30 +1,29 @@
-import type { Ayah, AyahPart } from '../content/repository';
+import type { Ayah, AyahPart, SurahSummary } from '../content/repository';
+import { ayahKey, partsByAyah } from '../content/parts';
 import type { Passage } from '../engine';
-import type { Place } from './position';
+import { describePosition, type Place } from './position';
 import type { StudyPassage } from './StudyView';
 
 /** One study screen: a whole ayah, or one part of a long one. */
 export type StudyPage = StudyPassage & { key: string };
+
+/** A page's key, for the pager. */
+export const keyOfPage = (page: StudyPage): string => page.key;
 
 /**
  * A surah's ayahs as study screens, one per ayah or, for a long ayah, one per part, in reading
  * order. `parts` are the surah's ayah parts (getSurahParts); ayahs without any are shown whole.
  */
 export function studyPages(ayahs: Ayah[], parts: AyahPart[]): StudyPage[] {
-  const partsByAyah = new Map<number, AyahPart[]>();
-  for (const part of parts) {
-    const list = partsByAyah.get(part.ayah);
-    if (list) list.push(part);
-    else partsByAyah.set(part.ayah, [part]);
-  }
+  const byAyah = partsByAyah(parts);
   return ayahs.flatMap(({ surah, ayah, words }): StudyPage[] => {
-    const ayahParts = partsByAyah.get(ayah);
+    const ayahParts = byAyah.get(ayahKey(surah, ayah));
     if (!ayahParts) return [{ key: String(ayah), surah, ayah, words }];
-    return ayahParts.map(({ part, count, first, last }) => ({
+    return ayahParts.map(({ part, count, fromWord, toWord }) => ({
       key: `${ayah}.${part}`,
       surah,
       ayah,
-      words: words.filter((w) => w.position >= first.word && w.position <= last.word),
+      words: words.filter((w) => w.position >= fromWord && w.position <= toWord),
       part: { number: part, count },
     }));
   });
@@ -41,10 +40,11 @@ export function sessionPages(
   ayahs: Map<string, Ayah>,
   parts: AyahPart[],
 ): StudyPage[] {
+  const byAyah = partsByAyah(parts);
   return passages.flatMap(({ surah, ayah, fromWord, toWord }) => {
-    const whole = ayahs.get(`${surah}:${ayah}`);
+    const whole = ayahs.get(ayahKey(surah, ayah));
     if (!whole) return [];
-    const ayahParts = parts.filter((p) => p.surah === surah && p.ayah === ayah);
+    const ayahParts = byAyah.get(ayahKey(surah, ayah)) ?? [];
     const pages = studyPages([whole], ayahParts).flatMap((page) => {
       const words = page.words.filter((w) => w.position >= fromWord && w.position <= toWord);
       return words.length > 0 ? [{ ...page, key: `${surah}:${page.key}`, words }] : [];
@@ -68,6 +68,38 @@ export function translationPageOf(pages: readonly StudyPage[], index: number): n
   );
   return found >= 0 ? found : undefined;
 }
+
+/**
+ * What heads a session screen: how far through the session's screens it is ("New today · 2 of 3",
+ * counting each part of a long ayah), and where it is in its surah. `surahs` are null until the
+ * surah names load.
+ */
+export function sessionHeading(
+  label: string,
+  pages: readonly StudyPage[],
+  index: number,
+  surahs: readonly SurahSummary[] | null,
+): { progress: string; reference: string } {
+  const { surah, ayah, part } = pages[index];
+  const summary = surahs?.find((s) => s.surah === surah);
+  return {
+    progress: `${label} · ${index + 1} of ${pages.length}`,
+    reference: describePosition(
+      summary?.nameEnglish ?? `Surah ${surah}`,
+      ayah,
+      summary?.ayahCount,
+      part,
+    ),
+  };
+}
+
+/** Whether a passage starts its ayah: the whole ayah, or its first part. */
+export const startsAyah = ({ part }: Pick<StudyPassage, 'part'>): boolean =>
+  !part || part.number === 1;
+
+/** Whether a passage ends its ayah: the whole ayah, or its last part. */
+export const endsAyah = ({ part }: Pick<StudyPassage, 'part'>): boolean =>
+  !part || part.number === part.count;
 
 /** The place a page shows, as remembered between visits: its ayah and, for a long ayah, its part. */
 export const placeOf = (page: StudyPage): Place =>

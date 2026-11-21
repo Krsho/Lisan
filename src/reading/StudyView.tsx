@@ -23,6 +23,7 @@ import { useColors, type Colors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { TafsirSection, TranslationSection } from './AyahTranslation';
 import { LinguisticNotes } from './LinguisticNotes';
+import { endsAyah } from './pages';
 import { loadConcepts, WordBreakdown, type Concepts } from './WordBreakdown';
 
 /** What one study screen shows: a whole ayah, or one part of a long ayah. */
@@ -49,7 +50,10 @@ type Props = {
   playback: AyahPlayback;
   /** On a later part, opens the part where the translation and tafsir are. */
   onOpenTranslationPart?: () => void;
-  /** Whether each word's card shows (default true); the recap shows the ayah without them. */
+  /**
+   * Whether the breakdown shows (default true): each word's card and the tafsir. The recap shows
+   * the ayah, its audio and translation without it until asked.
+   */
   showWordCards?: boolean;
   /** Extra content on a word's card, e.g. the session's "new" badge and "I know this". */
   renderWordExtra?: (word: Word) => ReactNode;
@@ -86,7 +90,7 @@ export function StudyView({
   const [highlighted, setHighlighted] = useState<number | null>(null);
   // A later part leaves the ayah's translation, tafsir and ayah-wide notes to another part.
   const laterPart = part !== undefined && part.number !== translationPart;
-  const endsAyah = !part || part.number === part.count;
+  const lastOfAyah = endsAyah(passage);
   const positions = new Set(words.map((w) => w.position));
   const shownNotes = notes.filter((note) =>
     note.word === null ? !laterPart : positions.has(note.word),
@@ -109,7 +113,7 @@ export function StudyView({
       {header}
       <AyahText
         words={words}
-        ayahNumber={endsAyah ? ayah : undefined}
+        ayahNumber={lastOfAyah ? ayah : undefined}
         highlighted={highlighted}
         onPressWord={showWordCards ? showCard : undefined}
       />
@@ -131,7 +135,6 @@ export function StudyView({
         <View onLayout={(e) => (cardsTop.current = e.nativeEvent.layout.y)} style={styles.cards}>
           <WordCards
             passage={passage}
-            colors={colors}
             highlighted={highlighted}
             renderWordExtra={renderWordExtra}
             onCardLayout={(position, y) => cardTops.current.set(position, y)}
@@ -139,7 +142,8 @@ export function StudyView({
         </View>
       ) : null}
       <LinguisticNotes notes={shownNotes} words={words} />
-      {!laterPart && translation ? <TafsirSection data={translation} /> : null}
+      {/* Compact (the recap), the tafsir waits for the breakdown. */}
+      {showWordCards && !laterPart && translation ? <TafsirSection data={translation} /> : null}
       {footer}
     </ScrollView>
   );
@@ -185,20 +189,21 @@ function AyahText({ words, ayahNumber, highlighted, onPressWord }: AyahTextProps
 }
 
 type WordCardsProps = {
-  passage: StudyPassage;
-  colors: Colors;
-  highlighted: number | null;
+  /** The words to give cards, and the ayah their details are in. */
+  passage: Pick<StudyPassage, 'surah' | 'ayah' | 'words'>;
+  highlighted?: number | null;
   renderWordExtra?: (word: Word) => ReactNode;
-  onCardLayout: (position: number, y: number) => void;
+  onCardLayout?: (position: number, y: number) => void;
 };
 
-function WordCards({
+/** A card for each word: its meaning and its breakdown. Also used for the Basmala in Browse. */
+export function WordCards({
   passage,
-  colors,
-  highlighted,
+  highlighted = null,
   renderWordExtra,
   onCardLayout,
 }: WordCardsProps) {
+  const colors = useColors();
   const content = useContent();
   const { surah, ayah, words } = passage;
   const key = words.map((w) => w.position).join(',');
@@ -224,7 +229,10 @@ function WordCards({
   }
   const [details, concepts] = state.data;
   return details.map((word, i) => (
-    <View key={word.position} onLayout={(e) => onCardLayout(word.position, e.nativeEvent.layout.y)}>
+    <View
+      key={word.position}
+      onLayout={(e) => onCardLayout?.(word.position, e.nativeEvent.layout.y)}
+    >
       <WordCard
         word={word}
         concepts={concepts}

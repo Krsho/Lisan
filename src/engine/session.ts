@@ -10,6 +10,12 @@ import {
 } from './events';
 import { eventDay, localDay, stamp, type Now } from './time';
 
+/**
+ * A run of words in one ayah, by word position (1-based, inclusive): a part of a long ayah, or the
+ * words a session studies.
+ */
+export type WordRange = { fromWord: number; toWord: number };
+
 /** An ayah on the curated path, with the lemmas of each of its words. */
 export type PathAyah = {
   surah: number;
@@ -19,7 +25,7 @@ export type PathAyah = {
    * For a long ayah, the parts the content build splits it into (in order, covering every word):
    * a session splits an ayah only between them. An ayah without parts is studied whole.
    */
-  parts?: { fromWord: number; toWord: number }[];
+  parts?: WordRange[];
 };
 
 /** What the engine plans with: the curated path in study order. */
@@ -43,11 +49,9 @@ export const NEW_LEMMA_BUDGET: Record<Pace, number> = { light: 10, normal: 15, i
 export const SESSION_WORD_LIMIT: Record<Pace, number> = { light: 30, normal: 45, intense: 75 };
 
 /** Words `fromWord` to `toWord` (inclusive) of one ayah, studied as new material. */
-export type Passage = {
+export type Passage = WordRange & {
   surah: number;
   ayah: number;
-  fromWord: number;
-  toWord: number;
   /** How many words the whole ayah has, to tell part of an ayah from all of it. */
   ayahWords: number;
 };

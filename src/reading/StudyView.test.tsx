@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import type { AyahPlayback } from '../audio/useRecitation';
 import type { Term, WordDetails, WordRef } from '../content/repository';
-import { StudyView, type StudyPassage } from './StudyView';
+import { StudyView, WordCards, type StudyPassage } from './StudyView';
 
 // The KFGQPC font is not committed (see content/README.md), so CI has no file to require.
 jest.mock('../theme/quranFont', () => ({
@@ -72,6 +72,7 @@ const playback: AyahPlayback = {
   buffering: false,
   error: null,
   toggle: jest.fn(),
+  stop: jest.fn(),
 };
 
 const words = [mockDetails[1], mockDetails[2]].map(({ position, text, bare, gloss }) => ({
@@ -164,6 +165,29 @@ it('shows the translation and tafsir on a later part that holds them', async () 
   expect(screen.getByText(translation.translation)).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Show tafsir' })).toBeTruthy();
   expect(screen.queryByRole('link')).toBeNull();
+});
+
+it('shows only the ayah, audio and translation when compact, the tafsir with the breakdown', async () => {
+  await render(
+    <StudyView
+      passage={whole}
+      translation={translation}
+      notes={[]}
+      playback={playback}
+      showWordCards={false}
+    />,
+  );
+
+  expect(screen.getByRole('button', { name: 'Play the recitation of ayah 2' })).toBeTruthy();
+  expect(screen.getByText('All praise is for Allah.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Show tafsir' })).toBeNull();
+});
+
+it('gives words shown outside the study view (the Basmala) their cards', async () => {
+  await render(<WordCards passage={whole} />);
+
+  expect(await screen.findByLabelText('Word 1: All praises')).toBeTruthy();
+  expect(screen.getByLabelText('Word 2: to Allah')).toBeTruthy();
 });
 
 it('can show the ayah without word cards', async () => {

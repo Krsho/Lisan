@@ -20,7 +20,10 @@ type EventRow = {
 const RATINGS = new Set([1, 2, 3, 4]);
 
 /** A place in a surah: an ayah, or one part (1-based) of a long ayah shown in parts. */
-export type BrowsePosition = { surah: number; ayah: number; part?: number };
+export type Place = { ayah: number; part?: number };
+
+/** The place the learner last viewed in a surah in Browse. */
+export type BrowsePosition = Place & { surah: number };
 
 /**
  * The event a row holds; 'unknown' for a kind from a newer app version (synced from another
@@ -85,6 +88,7 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
   let deviceId: Promise<string> | null = null;
   // Every write waits for the one before: on one connection, a write made while another's
   // transaction is open would try to open a transaction inside it, or be rolled back with it.
+  // The browse-position read waits too, so it sees places saved without waiting.
   let writes: Promise<unknown> = Promise.resolve();
   function serially<T>(write: () => Promise<T>): Promise<T> {
     const result = writes.then(write);
@@ -173,11 +177,16 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
       );
     },
 
-    /** Where the learner last was in a surah in Browse; null if they haven't browsed it. */
+    /**
+     * Where the learner last was in a surah in Browse; null if they haven't browsed it. Read after
+     * the writes before it, since places are saved without waiting.
+     */
     async getBrowsePosition(surah: number): Promise<BrowsePosition | null> {
-      const [row] = await db.all<{ ayah: number; part: number | null }>(
-        'SELECT ayah, part FROM browse_positions WHERE surah = ?',
-        [surah],
+      const [row] = await serially(() =>
+        db.all<{ ayah: number; part: number | null }>(
+          'SELECT ayah, part FROM browse_positions WHERE surah = ?',
+          [surah],
+        ),
       );
       if (!row) return null;
       return { surah, ayah: row.ayah, ...(row.part === null ? {} : { part: row.part }) };

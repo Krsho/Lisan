@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
 import { useAsync } from '../async/useAsync';
@@ -16,10 +16,18 @@ import { useBrowsePositions, useEventLog } from '../user/UserStoreProvider';
 import { AddToReview } from './AddToReview';
 import { notesFor, useLinguisticNotes } from './LinguisticNotes';
 import { JumpToAyah } from './JumpToAyah';
-import { placeOf, studyPages, type StudyPage } from './pages';
+import {
+  endsAyah,
+  keyOfPage,
+  placeOf,
+  startsAyah,
+  studyPages,
+  translationPageOf,
+  type StudyPage,
+} from './pages';
 import { describePosition, pageIndexOf, type Place } from './position';
 import { StudyPager } from './StudyPager';
-import { StudyView } from './StudyView';
+import { StudyView, WordCards } from './StudyView';
 
 type Props = {
   summary: SurahSummary;
@@ -84,13 +92,42 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
   const [index, setIndex] = useState(() => pageIndexOf(pagePlaces, initialPlace));
   const positions = useBrowsePositions();
   const playback = useAyahPlayback(audioSource);
+  // The recitation stops when the learner leaves its page.
+  const { stop } = playback;
+  useEffect(() => stop, [stop, index]);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
   const notes = useLinguisticNotes([surah], 'en');
   const { events, record } = useEventLog();
-  // Redraw the pages when playback changes, once the notes load, and when the log changes.
-  const extraData = useMemo(
-    () => ({ playback, notes, events, download }),
-    [playback, notes, events, download],
+  // Changes, and so redraws the pages, when playback changes, once the notes load, and when the
+  // log or the download changes: not when the learner turns the page.
+  const renderPage = useCallback(
+    (page: StudyPage, i: number) => {
+      const { ayah } = page;
+      const ayahLemmas = lemmas.get(ayah);
+      const translationPage = translationPageOf(pages, i);
+      return (
+        <StudyView
+          passage={page}
+          translation={translations.get(ayah) ?? null}
+          notes={notesFor(notes, surah, ayah)}
+          playback={playback}
+          onOpenTranslationPart={
+            translationPage !== undefined ? () => setIndex(translationPage) : undefined
+          }
+          header={ayah === 1 && startsAyah(page) && basmala ? <Basmala words={basmala} /> : null}
+          footer={
+            <>
+              {/* The ayah's own controls go after its last part. */}
+              {ayahLemmas && endsAyah(page) ? (
+                <AddToReview ayah={ayahLemmas} events={events} record={record} />
+              ) : null}
+              <RecitationBar source={audioSource} download={download} error={playback.error} />
+            </>
+          }
+        />
+      );
+    },
+    [pages, lemmas, translations, notes, surah, playback, basmala, events, record, download],
   );
   const current = pages[index];
   const place = current ? placeOf(current) : null;
@@ -123,55 +160,59 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
       />
       <StudyPager
         pages={pages}
-        keyOf={(page) => page.key}
+        keyOf={keyOfPage}
         index={index}
         onIndexChange={setIndex}
-        extraData={extraData}
-        renderPage={(page, i) => {
-          const { ayah, part } = page;
-          const ayahLemmas = lemmas.get(ayah);
-          const firstPart = !part || part.number === 1;
-          // The ayah's own controls go after its last part.
-          const endsAyah = !part || part.number === part.count;
-          return (
-            <StudyView
-              passage={page}
-              translation={translations.get(ayah) ?? null}
-              notes={notesFor(notes, surah, ayah)}
-              playback={playback}
-              onOpenTranslationPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
-              header={ayah === 1 && firstPart && basmala ? <Basmala words={basmala} /> : null}
-              footer={
-                <>
-                  {ayahLemmas && endsAyah ? (
-                    <AddToReview ayah={ayahLemmas} events={events} record={record} />
-                  ) : null}
-                  <RecitationBar source={audioSource} download={download} error={playback.error} />
-                </>
-              }
-            />
-          );
-        }}
+        renderPage={renderPage}
       />
     </>
   );
 }
 
-/** The Basmala heading a surah's first ayah. */
+/**
+ * The Basmala heading a surah's first ayah, compact; "Show breakdown" opens a card for each of its
+ * words, as in Al-Fatiha 1:1, where they are from.
+ */
 function Basmala({ words }: { words: LinkedWord[] }) {
   const colors = useColors();
   const size = useQuranTextSize();
+  const [open, setOpen] = useState(false);
+  const [first] = words;
   return (
     <View style={[styles.basmala, { borderColor: colors.border }]}>
       <Text style={[styles.basmalaText, size.text(24, 46), { color: colors.muted }]}>
         {words.map((w) => w.text).join(' ')}
       </Text>
+      {first ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              open ? "Hide the Basmala's breakdown" : "Show the Basmala's breakdown"
+            }
+            accessibilityState={{ expanded: open }}
+            onPress={() => setOpen((o) => !o)}
+            hitSlop={8}
+          >
+            <Text style={[styles.toggle, { color: colors.accent }]}>
+              {open ? 'Hide breakdown' : 'Show breakdown'}
+            </Text>
+          </Pressable>
+          {open ? (
+            <View style={styles.basmalaCards}>
+              <WordCards passage={{ surah: first.ref.surah, ayah: first.ref.ayah, words }} />
+            </View>
+          ) : null}
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  basmala: { paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  basmala: { paddingBottom: 8, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  basmalaCards: { gap: 12 },
+  toggle: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
   // Sizes come from the font size setting (useQuranTextSize).
   basmalaText: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'center' },
 });

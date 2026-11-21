@@ -169,7 +169,7 @@ describe('content build', () => {
   // The sample has no long ayah, so these builds use smaller parts: 2 to 6 words, at most 8.
   const smallParts = { partSize: { min: 2, max: 6, limit: 8 } };
 
-  it('splits long ayahs into parts at pause marks, as word references', async () => {
+  it('splits long ayahs into parts at pause marks, as word ranges', async () => {
     const content = build(smallParts);
 
     const parts = (await content.getSurahParts(2)).filter((p) => p.ayah === 2);
@@ -181,16 +181,16 @@ describe('content build', () => {
         ayah: 2,
         part: 1,
         count: 2,
-        first: { surah: 2, ayah: 2, word: 1 },
-        last: { surah: 2, ayah: 2, word: 4 },
+        fromWord: 1,
+        toWord: 4,
       },
       {
         surah: 2,
         ayah: 2,
         part: 2,
         count: 2,
-        first: { surah: 2, ayah: 2, word: 5 },
-        last: { surah: 2, ayah: 2, word: 7 },
+        fromWord: 5,
+        toWord: 7,
       },
     ]);
   });
@@ -200,7 +200,7 @@ describe('content build', () => {
 
     // 1:7 has 9 words and no marks, more than a part may hold.
     const parts = (await content.getSurahParts(1)).filter((p) => p.ayah === 7);
-    expect(parts.map((p) => [p.first.word, p.last.word])).toEqual([
+    expect(parts.map((p) => [p.fromWord, p.toWord])).toEqual([
       [1, 4],
       [5, 9],
     ]);

@@ -139,6 +139,22 @@ describe('the daily new-ayah session', () => {
     ]);
   });
 
+  it('resumes mid-part from a log split at a word, then keeps to the part boundaries', () => {
+    // An older content version split the ayah at word 20; this one splits it into parts.
+    const words = ayahOfNewWords(2, 282, 40, 'w');
+    const older = { path: [inParts(words, 20, 20)] };
+    const { log } = studyDays(1, older);
+    const current = { path: [inParts(words, 12, 3, 10, 15)] };
+
+    const day2 = planSession(current, log, normal, at(START + DAY));
+    const later = record(log, completeSession(day2, log, at(START + DAY)));
+    const day3 = planSession(current, later, normal, at(START + 2 * DAY));
+
+    // Word 21 is inside the part 16–25: the session finishes that part, then goes part by part.
+    expect(passages(day2)).toEqual(['2:282:21-25']);
+    expect(passages(day3)).toEqual(['2:282:26-40']);
+  });
+
   it('takes a part whole even when it alone is over the budget', () => {
     const long = { path: [inParts(ayahOfNewWords(2, 282, 30, 'w'), 20, 10)] };
 
