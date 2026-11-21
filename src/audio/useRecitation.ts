@@ -37,7 +37,11 @@ export function useAyahPlayback(source: AudioSource): AyahPlayback {
         player.pause();
       } else {
         const ended = status.duration > 0 && status.currentTime >= status.duration - 0.05;
-        if (ended || status.didJustFinish) player.seekTo(0).then(() => player.play());
+        if (ended || status.didJustFinish)
+          player
+            .seekTo(0)
+            .then(() => player.play())
+            .catch((error: unknown) => console.warn('Could not replay the recitation', error));
         else player.play();
       }
     },

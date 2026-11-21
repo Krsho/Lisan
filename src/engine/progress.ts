@@ -1,13 +1,6 @@
-import type { ReviewEvent, WordRef } from './events';
-import {
-  eventDay,
-  knownLemmas,
-  learnedLemmas,
-  localDay,
-  pathPosition,
-  type Content,
-  type Now,
-} from './session';
+import { EVENT_KINDS, type LogEvent, type WordRef } from './events';
+import { knownLemmas, learnedLemmas, pathPosition, type Content } from './session';
+import { eventDay, localDay, type Now } from './time';
 
 export type Progress = {
   /** Path ayahs studied to their end; ones skipped by a chosen start point don't count. */
@@ -25,7 +18,7 @@ export type Progress = {
 };
 
 /** How far the learner has come, derived from the log. */
-export function progress(content: Content, log: ReviewEvent[]): Progress {
+export function progress(content: Content, log: LogEvent[]): Progress {
   const { path } = content;
   const { next, chosenStart } = pathPosition(path, log);
   const known = knownLemmas(log);
@@ -42,7 +35,7 @@ export function progress(content: Content, log: ReviewEvent[]): Progress {
 }
 
 /** Whether an event is part of a daily session: completing one, or answering a review or quiz. */
-const isSession = (e: ReviewEvent) => e.kind === 'completed' || e.kind === 'review';
+const isSession = (e: LogEvent) => EVENT_KINDS[e.kind].isSession;
 
 /**
  * How many local days in a row the learner has done a session, ending today, or yesterday when
@@ -52,7 +45,7 @@ const isSession = (e: ReviewEvent) => e.kind === 'completed' || e.kind === 'revi
  * nor merges two days into one. After flying west a session can be on a date still ahead of the
  * learner's clock; it counts as today.
  */
-export function streak(log: ReviewEvent[], now: Now): number {
+export function streak(log: LogEvent[], now: Now): number {
   const days = new Set(log.filter(isSession).map((e) => eventDay(e, now.utcOffsetMinutes)));
   if (days.size === 0) return 0;
   const today = localDay(now.time, now.utcOffsetMinutes);

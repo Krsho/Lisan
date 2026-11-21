@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ReviewEvent } from '../engine';
+import type { LogEvent } from '../engine';
 import { openMemoryDb } from '../testing/memoryDb';
 import { MIGRATIONS, migrateUserDb } from './migrations';
 import { createUserStore } from './store';
@@ -163,6 +163,30 @@ describe('user store', () => {
     });
   });
 
+  it('leaves out stored events that are not valid for their kind', async () => {
+    const store = await openStore();
+    const insert = (id: string, kind: string, lemma: string | null, rating: number | null = null) =>
+      db.run(
+        `INSERT INTO review_events
+           (id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms, timestamp,
+            device_id)
+         VALUES (?, ?, ?, 1, 1, 4, ?, ?, 100, 5, 'device-b')`,
+        [id, kind, lemma, rating, rating === null ? null : 1],
+      );
+    await insert('learn-without-lemma', 'learn', null);
+    await insert('known-without-lemma', 'known', null);
+    await insert('review-without-lemma', 'review', null, 3);
+    await insert('completed-with-lemma', 'completed', 'رَحِيم');
+    await insert('good', 'learn', 'رَحِيم');
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const events = await store.listEvents();
+
+    expect(events.map((e) => e.id)).toEqual(['good']);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('4'));
+    warn.mockRestore();
+  });
+
   it('records a chosen start point on the path', async () => {
     const store = await openStore();
     const nas = { surah: 114, ayah: 1, word: 1 };
@@ -175,7 +199,7 @@ describe('user store', () => {
 
   it('never overwrites an event: one added again with the same id is skipped', async () => {
     const store = await openStore();
-    const event: ReviewEvent = {
+    const event: LogEvent = {
       id: 'e1',
       kind: 'learn',
       lemmaId: 'رَحِيم',
@@ -188,6 +212,58 @@ describe('user store', () => {
     await store.addEvents([event, { ...event, lemmaId: 'changed', timestamp: 2 }]);
 
     expect(await store.listEvents()).toEqual([event]);
+  });
+
+  it('keeps every write when several are made at once', async () => {
+    const store = await openStore();
+    const learn = (lemmaId: string, timestamp: number) =>
+      store.record([
+        { kind: 'learn', lemmaId, wordRef: fatiha, timestamp },
+        { kind: 'learn', lemmaId: `${lemmaId}-2`, wordRef: fatiha, timestamp },
+      ]);
+
+    // Answers saved one by one as they are given, and a setting changed meanwhile.
+    await Promise.all([
+      learn('a', 1),
+      learn('b', 2),
+      store.saveSettings([{ key: 'theme', value: '"dark"' }], 3),
+      learn('c', 4),
+    ]);
+
+    expect((await store.listEvents()).map((e) => e.lemmaId).sort()).toEqual([
+      'a',
+      'a-2',
+      'b',
+      'b-2',
+      'c',
+      'c-2',
+    ]);
+    expect(await store.listSettings()).toEqual([{ key: 'theme', value: '"dark"' }]);
+  });
+
+  it('keeps a setting saved while a failing write is rolled back', async () => {
+    await migrateUserDb(db);
+    // Each statement takes a moment, as on a device, so writes can overlap.
+    const tick = () => new Promise((resolve) => setImmediate(resolve));
+    const slow = {
+      ...db,
+      run: async (...args: Parameters<typeof db.run>) => (await tick(), db.run(...args)),
+    };
+    const store = createUserStore(slow, randomUUID);
+    await store.getDeviceId();
+    const bad = { kind: 'learn', lemmaId: 'x', wordRef: fatiha, timestamp: Symbol() };
+
+    const recording = store.record([
+      { kind: 'learn', lemmaId: 'a', wordRef: fatiha, timestamp: 1 },
+      bad as never,
+    ]);
+    await tick();
+    const saving = store.saveSettings([{ key: 'theme', value: '"dark"' }], 2);
+    const results = await Promise.allSettled([recording, saving]);
+
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'fulfilled']);
+    expect(await store.listEvents()).toEqual([]);
+    expect(await store.listSettings()).toEqual([{ key: 'theme', value: '"dark"' }]);
   });
 
   it('lists the log oldest first', async () => {

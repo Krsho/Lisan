@@ -6,7 +6,11 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-import { parseManifest, type ContentManifest } from '../../src/content/update/policy.ts';
+import {
+  contentDatabaseName,
+  parseManifest,
+  type ContentManifest,
+} from '../../src/content/update/policy.ts';
 
 export type ReleaseOptions = {
   /** The built content database (assets/content/content.db). */
@@ -45,7 +49,7 @@ export function prepareContentRelease(options: ReleaseOptions) {
   const { dbFile, outDir, contentVersion, schema, repo } = options;
   checkDatabase(dbFile, contentVersion);
 
-  const name = `content-v${contentVersion}.db`;
+  const name = contentDatabaseName(contentVersion);
   mkdirSync(outDir, { recursive: true });
   const dbOut = join(outDir, name);
   copyFileSync(dbFile, dbOut);

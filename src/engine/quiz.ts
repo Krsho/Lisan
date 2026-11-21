@@ -1,13 +1,16 @@
 import {
+  byId,
   RATING,
+  wordRefKey,
   type EventDraft,
   type GradedEvent,
   type Rating,
-  type ReviewEvent,
+  type LogEvent,
   type WordRef,
 } from './events';
 import { lemmaCards } from './cards';
-import { knownLemmas, type Now, type SessionPlan } from './session';
+import { knownLemmas, type SessionPlan } from './session';
+import { stamp, type Now } from './time';
 
 /** One morphological piece of a word, with its glossary term keys (e.g. "case.genitive"). */
 export type QuizSegment = { text: string; lemma: string | null; terms: string[] };
@@ -154,12 +157,7 @@ function similarLemmas(
         e.sample !== null && e.lemmaId !== target.lemmaId && !exclude.has(e.lemmaId),
     )
     .map((e) => ({ e, samePos: e.partOfSpeech === target.partOfSpeech ? 0 : 1, d: distance(e) }))
-    .sort(
-      (a, b) =>
-        a.samePos - b.samePos ||
-        a.d - b.d ||
-        (a.e.lemmaId < b.e.lemmaId ? -1 : a.e.lemmaId > b.e.lemmaId ? 1 : 0),
-    )
+    .sort((a, b) => a.samePos - b.samePos || a.d - b.d || byId(a.e.lemmaId, b.e.lemmaId))
     .map(({ e }) => e);
 }
 
@@ -180,6 +178,8 @@ type Target = {
   segment: QuizSegment;
   partOfSpeech: string | null;
   frequency: number;
+  /** A word that is the lemma alone, if there is one. */
+  sample: LemmaEntry['sample'];
 };
 
 function meaningItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): QuizItem | null {
@@ -202,13 +202,21 @@ function meaningItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): Qui
 }
 
 function arabicItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): QuizItem | null {
-  const gloss = t.word.gloss;
-  if (!gloss) return null;
+  // Wrong options are words that are their lemma alone. A word that carries other lemmas too (a
+  // prefix such as the definite article) would stand out among them, so it is asked as its
+  // lemma's own word, with that word's meaning.
+  const alone = t.word.segments.every((s) => s.lemma === null || s.lemma === t.lemmaId);
+  const shown = alone ? t.word : t.sample;
+  const gloss = shown?.gloss;
+  if (!shown || !gloss) return null;
   // A word whose meaning reads the same would also be right, so it is no wrong option.
-  const candidates = similarLemmas(lemmas, t, exclude).filter((e) => !same(e.sample.gloss, gloss));
+  const meanings = [gloss, t.word.gloss].filter((g): g is string => g !== null);
+  const candidates = similarLemmas(lemmas, t, exclude).filter(
+    (e) => !meanings.some((g) => same(e.sample.gloss, g)),
+  );
   const wrong = pick(
     candidates.map((e) => e.sample.bare),
-    [t.word.bare],
+    [shown.bare, t.word.bare],
     OPTIONS - 1,
   );
   if (wrong.length === 0) return null;
@@ -218,8 +226,8 @@ function arabicItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): Quiz
     wordRef: t.word.ref,
     word: t.word.bare,
     meaning: gloss,
-    answer: t.word.bare,
-    options: shuffle([t.word.bare, ...wrong], `${t.lemmaId}:arabic`),
+    answer: shown.bare,
+    options: shuffle([shown.bare, ...wrong], `${t.lemmaId}:arabic`),
   };
 }
 
@@ -265,8 +273,6 @@ function grammarItem(t: Target): QuizItem | null {
   };
 }
 
-const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
-
 /**
  * The quiz after today's new ayah(s): one question per new lemma, in the order they were met,
  * leaving out lemmas the learner has marked "I know this". Question types take turns (Arabic →
@@ -274,7 +280,7 @@ const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
  * prefix or suffix (such as the definite article) is asked about grammatically only. Wrong options
  * come from lemmas of the same part of speech and a similar frequency.
  */
-export function planQuiz(plan: SessionPlan, log: ReviewEvent[], content: QuizContent): QuizItem[] {
+export function planQuiz(plan: SessionPlan, log: LogEvent[], content: QuizContent): QuizItem[] {
   // Types take turns along the quiz.
   return questionsFor(plan.newLemmas, knownLemmas(log), content, (_, index) => index);
 }
@@ -285,11 +291,7 @@ export function planQuiz(plan: SessionPlan, log: ReviewEvent[], content: QuizCon
  * moves on with each review of a card, so a lemma is asked about in turn by meaning, by Arabic word
  * and by grammar. Cards marked "I know this" since the session was planned are left out.
  */
-export function planReview(
-  plan: SessionPlan,
-  log: ReviewEvent[],
-  content: QuizContent,
-): QuizItem[] {
+export function planReview(plan: SessionPlan, log: LogEvent[], content: QuizContent): QuizItem[] {
   const cards = lemmaCards(log);
   return questionsFor(
     plan.reviews,
@@ -306,13 +308,13 @@ function questionsFor(
   /** Which question type to try first for a lemma (an index into QUIZ_TYPES, wrapped). */
   firstType: (lemmaId: string, index: number) => number,
 ): QuizItem[] {
-  const words = new Map(content.words.map((w) => [refKey(w.ref), w]));
+  const words = new Map(content.words.map((w) => [wordRefKey(w.ref), w]));
   const entries = new Map(content.lemmas.map((e) => [e.lemmaId, e]));
   const items: QuizItem[] = [];
 
   for (const { lemmaId, wordRef } of targets) {
     if (known.has(lemmaId)) continue;
-    const word = words.get(refKey(wordRef));
+    const word = words.get(wordRefKey(wordRef));
     const segment = word?.segments.find((s) => s.lemma === lemmaId);
     if (!word || !segment) continue;
     const entry = entries.get(lemmaId);
@@ -322,6 +324,7 @@ function questionsFor(
       segment,
       partOfSpeech: partOfSpeechOf(segment) ?? entry?.partOfSpeech ?? null,
       frequency: entry?.frequency ?? 1,
+      sample: entry?.sample ?? null,
     };
     // The word's other lemmas would make a confusing wrong option (its meaning includes theirs).
     const exclude = new Set(word.segments.flatMap((s) => (s.lemma ? [s.lemma] : [])));
@@ -378,7 +381,6 @@ export function gradeAnswer(
     rating: ratingFor(correct, responseTimeMs),
     correct,
     responseTimeMs: Math.max(0, Math.round(responseTimeMs)),
-    timestamp: now.time,
-    utcOffsetMinutes: now.utcOffsetMinutes,
+    ...stamp(now),
   };
 }

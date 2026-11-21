@@ -1,6 +1,6 @@
 import {
   ARABIC_FONT_SCALES,
-  DEFAULT_READING_SETTINGS,
+  DEFAULT_APP_SETTINGS,
   parseSettings,
   resolveColorScheme,
   serializeSettings,
@@ -35,9 +35,7 @@ describe('reading settings', () => {
       reminderOffered: true,
     };
 
-    expect(parseSettings(serializeSettings(stored as typeof DEFAULT_READING_SETTINGS))).toEqual(
-      stored,
-    );
+    expect(parseSettings(serializeSettings(stored as typeof DEFAULT_APP_SETTINGS))).toEqual(stored);
   });
 
   it('falls back to the default for each value it cannot use, keeping the others', () => {
@@ -52,13 +50,11 @@ describe('reading settings', () => {
       { key: 'reminderTime', value: '1440' },
     ]);
 
-    expect(settings).toEqual({ ...DEFAULT_READING_SETTINGS, arabicFontScale: 1.15 });
+    expect(settings).toEqual({ ...DEFAULT_APP_SETTINGS, arabicFontScale: 1.15 });
   });
 
   it('ignores keys it does not know, such as ones from a newer app version', () => {
-    expect(parseSettings([{ key: 'hideTashkeel', value: 'true' }])).toEqual(
-      DEFAULT_READING_SETTINGS,
-    );
+    expect(parseSettings([{ key: 'hideTashkeel', value: 'true' }])).toEqual(DEFAULT_APP_SETTINGS);
   });
 
   it('keeps a stored font size within the smallest and largest sizes', () => {

@@ -1,4 +1,11 @@
-import { chooseActiveContent, parseManifest, parseUpdateState, staleContentFiles } from './policy';
+import {
+  chooseActiveContent,
+  isUpdateWanted,
+  parseManifest,
+  parseUpdateState,
+  rejectContentVersion,
+  staleContentFiles,
+} from './policy';
 
 const SHA = 'a'.repeat(64);
 const valid = {
@@ -53,6 +60,22 @@ describe('update state file', () => {
     ['not an object', '6'],
   ])('treats a %s state file as no downloaded content', (_, text) => {
     expect(parseUpdateState(text)).toEqual({ active: null, checkedAt: null });
+  });
+
+  it('reads the versions that were downloaded but would not open', () => {
+    expect(parseUpdateState('{"active":null,"checkedAt":5,"rejected":[6,"7",0,8]}')).toEqual({
+      active: null,
+      checkedAt: 5,
+      rejected: [6, 8],
+    });
+  });
+
+  it('rejects a version that would not open: it is no longer active, and never wanted again', () => {
+    const state = rejectContentVersion({ active: 6, checkedAt: 5 }, 6);
+
+    expect(state).toEqual({ active: null, checkedAt: 5, rejected: [6] });
+    expect(isUpdateWanted({ ...valid, version: 6 }, 4, 1, state)).toBe(false);
+    expect(isUpdateWanted({ ...valid, version: 7 }, 4, 1, state)).toBe(true);
   });
 
   it('ignores an active version that is not a positive integer', () => {
@@ -112,6 +135,9 @@ describe('cleaning up old content databases', () => {
       'content-v6.db',
       'content-v6.db-journal',
       'content-v7.db.part',
+      'content-v7.db.part-journal',
+      'content-v7.db.part-wal',
+      'content-v7.db.part-shm',
       'user.db',
       'notes.txt',
     ];
@@ -121,6 +147,9 @@ describe('cleaning up old content databases', () => {
       'content-v5.db-wal',
       'content-v5.db-shm',
       'content-v7.db.part',
+      'content-v7.db.part-journal',
+      'content-v7.db.part-wal',
+      'content-v7.db.part-shm',
     ]);
   });
 });

@@ -1,4 +1,4 @@
-import type { EventDraft, ReviewEvent } from '../engine';
+import { EVENT_KINDS, isEventKind, type EventDraft, type LogEvent } from '../engine';
 import type { SettingRow } from '../settings/settings';
 import type { SqlValue, UserSqlRunner } from './sql';
 
@@ -17,21 +17,16 @@ type EventRow = {
   utc_offset_minutes: number | null;
 };
 
-const KINDS = new Set<string>([
-  'learn',
-  'known',
-  'known-undone',
-  'added',
-  'completed',
-  'start',
-  'review',
-]);
 const RATINGS = new Set([1, 2, 3, 4]);
 
-function toEvent(row: EventRow): ReviewEvent | null {
-  // Kinds from a newer app version (synced from another device) are kept in the table but left out.
-  if (!KINDS.has(row.kind) || row.surah === null || row.ayah === null || row.word === null)
-    return null;
+/**
+ * The event a row holds; 'unknown' for a kind from a newer app version (synced from another
+ * device), kept in the table but left out; 'invalid' for a row not valid for its kind.
+ */
+function toEvent(row: EventRow): LogEvent | 'unknown' | 'invalid' {
+  if (!isEventKind(row.kind)) return 'unknown';
+  if (row.surah === null || row.ayah === null || row.word === null) return 'invalid';
+  if (EVENT_KINDS[row.kind].hasLemma !== (row.lemma_id !== null)) return 'invalid';
   const base = {
     id: row.id,
     lemmaId: row.lemma_id,
@@ -41,19 +36,19 @@ function toEvent(row: EventRow): ReviewEvent | null {
     ...(row.utc_offset_minutes === null ? {} : { utcOffsetMinutes: row.utc_offset_minutes }),
   };
   if (row.kind === 'review') {
-    if (row.rating === null || !RATINGS.has(row.rating) || row.correct === null) return null;
+    if (row.rating === null || !RATINGS.has(row.rating) || row.correct === null) return 'invalid';
     return {
       ...base,
       kind: 'review',
       rating: row.rating,
       correct: row.correct === 1,
       responseTimeMs: row.response_time_ms ?? 0,
-    } as ReviewEvent;
+    } as LogEvent;
   }
-  return { ...base, kind: row.kind } as ReviewEvent;
+  return { ...base, kind: row.kind } as LogEvent;
 }
 
-function toRow(event: ReviewEvent): SqlValue[] {
+function toRow(event: LogEvent): SqlValue[] {
   const { id, kind, lemmaId, wordRef, timestamp, deviceId, utcOffsetMinutes } = event;
   const graded = event.kind === 'review' ? event : null;
   return [
@@ -85,6 +80,14 @@ const INSERT_EVENT = `
  */
 export function createUserStore(db: UserSqlRunner, newId: () => string) {
   let deviceId: Promise<string> | null = null;
+  // Every write waits for the one before: on one connection, a write made while another's
+  // transaction is open would try to open a transaction inside it, or be rolled back with it.
+  let writes: Promise<unknown> = Promise.resolve();
+  function serially<T>(write: () => Promise<T>): Promise<T> {
+    const result = writes.then(write);
+    writes = result.catch(() => {});
+    return result;
+  }
 
   async function loadDeviceId(): Promise<string> {
     const [row] = await db.all<{ value: string }>(
@@ -93,7 +96,9 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     );
     if (row) return row.value;
     // Random, not a hardware id: it only tells which device recorded an event.
-    await db.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('device_id', ?)", [newId()]);
+    await serially(() =>
+      db.run("INSERT OR IGNORE INTO meta (key, value) VALUES ('device_id', ?)", [newId()]),
+    );
     const [created] = await db.all<{ value: string }>(
       "SELECT value FROM meta WHERE key = 'device_id'",
       [],
@@ -109,29 +114,40 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     },
 
     /** Records events the engine decided on, from this device. Returns them as stored. */
-    async record(drafts: EventDraft[]): Promise<ReviewEvent[]> {
+    async record(drafts: EventDraft[]): Promise<LogEvent[]> {
       const device = await store.getDeviceId();
-      const events = drafts.map((d) => ({ ...d, id: newId(), deviceId: device }) as ReviewEvent);
+      const events = drafts.map((d) => ({ ...d, id: newId(), deviceId: device }) as LogEvent);
       await store.addEvents(events);
       return events;
     },
 
     /** Adds complete events (e.g. from another device); ones already in the log are skipped. */
-    async addEvents(events: ReviewEvent[]): Promise<void> {
-      await db.transaction(async () => {
-        for (const event of events) await db.run(INSERT_EVENT, toRow(event));
-      });
+    addEvents(events: LogEvent[]): Promise<void> {
+      return serially(() =>
+        db.transaction(async () => {
+          for (const event of events) await db.run(INSERT_EVENT, toRow(event));
+        }),
+      );
     },
 
     /** The whole log, oldest first. */
-    async listEvents(): Promise<ReviewEvent[]> {
+    async listEvents(): Promise<LogEvent[]> {
       const rows = await db.all<EventRow>(
         `SELECT id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms,
                 timestamp, device_id, utc_offset_minutes
            FROM review_events ORDER BY timestamp, id`,
         [],
       );
-      return rows.map(toEvent).filter((e): e is ReviewEvent => e !== null);
+      const events: LogEvent[] = [];
+      let invalid = 0;
+      for (const row of rows) {
+        const event = toEvent(row);
+        if (event === 'invalid') invalid++;
+        else if (event !== 'unknown') events.push(event);
+      }
+      // Left out rather than failing the whole log; kept in the table for a later fix.
+      if (invalid > 0) console.warn(`Left out ${invalid} invalid events from the log`);
+      return events;
     },
 
     /** Every stored setting, as written by saveSettings. */
@@ -140,15 +156,18 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     },
 
     /** Stores settings, replacing their previous values; `updatedAt` is epoch ms. */
-    async saveSettings(rows: SettingRow[], updatedAt: number): Promise<void> {
-      // One statement per setting, each atomic on its own, and no transaction: a quick run of
-      // changes (tapping A+ twice) must not try to open a transaction inside another.
-      for (const { key, value } of rows)
-        await db.run(
-          `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-             ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-          [key, value, updatedAt],
-        );
+    saveSettings(rows: SettingRow[], updatedAt: number): Promise<void> {
+      return serially(() =>
+        db.transaction(async () => {
+          for (const { key, value } of rows)
+            await db.run(
+              `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+                 ON CONFLICT (key) DO UPDATE
+                   SET value = excluded.value, updated_at = excluded.updated_at`,
+              [key, value, updatedAt],
+            );
+        }),
+      );
     },
   };
   return store;

@@ -13,7 +13,7 @@ import {
   type QuizContent,
   type QuizItem,
   type QuizWord,
-  type ReviewEvent,
+  type LogEvent,
   type SessionPlan,
 } from '.';
 
@@ -145,12 +145,12 @@ const path: PathAyah[] = [
 ];
 
 let nextId = 0;
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
-const todaysPlan = (log: ReviewEvent[] = []) =>
+const todaysPlan = (log: LogEvent[] = []) =>
   planSession({ path }, log, { pace: 'normal' }, at(START));
 
 /** A plan that introduces just these lemmas, each in the word it is listed with. */
@@ -216,6 +216,15 @@ describe("the quiz on today's new words", () => {
     expect(item).toMatchObject({ lemmaId: 'عَبَدَ', meaning: 'we worship', answer: 'نَعْبُدُ' });
     // Verbs nearest 143 occurrences.
     expect(wrongOptions(item).sort()).toEqual(['خَلَقَ', 'يَعْلَمُ', 'كَتَبَ'].sort());
+  });
+
+  it('offers the lemma on its own for a word with a prefix, like the wrong words', () => {
+    // ٱلرَّحِيمِ carries the definite article, which no wrong word (a lemma alone) would have.
+    const items = planQuiz(planOf(['اسْم', 1, 1], ['رَحِيم', 1, 4]), [], content);
+    const [item] = ofType(items, 'arabic');
+
+    expect(item).toMatchObject({ lemmaId: 'رَحِيم', meaning: 'Most Merciful', answer: 'رَحِيمًا' });
+    expect(item.options).not.toContain('ٱلرَّحِيمِ');
   });
 
   it('never offers a wrong word that means the same as the answer', () => {
@@ -300,17 +309,32 @@ describe('grading quiz answers', () => {
     return lemmaCards(log).get('رَحْمٰن')!.due;
   }
 
-  it('schedules a right, fast answer days ahead and a wrong, slow one minutes ahead', () => {
-    const fast = dueAfter(item.answer, 2_000);
+  it('schedules every first answer a day or more ahead, wrong or slow sooner than right', () => {
     const good = dueAfter(item.answer, 8_000);
     const hard = dueAfter(item.answer, 30_000);
     const missed = dueAfter(wrong, 30_000);
 
-    expect(fast).toBeGreaterThanOrEqual(answeredAt.time + DAY);
-    expect(fast).toBeGreaterThan(good);
+    expect(missed).toBeGreaterThanOrEqual(answeredAt.time + DAY);
     expect(good).toBeGreaterThan(hard);
-    expect(hard).toBeGreaterThan(missed);
-    expect(missed).toBeLessThanOrEqual(answeredAt.time + 10 * MINUTE);
+    expect(hard).toBeGreaterThanOrEqual(missed);
+  });
+
+  it('schedules a right, fast first answer no further out than a good one', () => {
+    // On the day a word is learned, a quick right answer shows it was just seen, not that it is
+    // known: it is not worth a week's wait.
+    expect(dueAfter(item.answer, 2_000)).toBe(dueAfter(item.answer, 8_000));
+  });
+
+  it('schedules a right, fast answer at a later review further out than a good one', () => {
+    const dueAfterReview = (ms: number) => {
+      let log = record([], completeSession(todaysPlan(), [], at(START)));
+      log = record(log, [gradeAnswer(item, item.answer, 8_000, answeredAt)]);
+      const reviewedAt = at(lemmaCards(log).get('رَحْمٰن')!.due);
+      log = record(log, [gradeAnswer(item, item.answer, ms, reviewedAt)]);
+      return lemmaCards(log).get('رَحْمٰن')!.due;
+    };
+
+    expect(dueAfterReview(2_000)).toBeGreaterThan(dueAfterReview(8_000));
   });
 
   it('gives a lemma one card, whatever word forms it is asked in', () => {

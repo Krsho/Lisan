@@ -35,9 +35,7 @@ export function RecitationBar({
 
   return (
     <View style={[styles.bar, { backgroundColor: colors.surface }]}>
-      <Text style={[styles.credit, { color: colors.muted }]}>
-        {`Recitation by ${source.reciter.name}, audio from ${source.provider.name}.`}
-      </Text>
+      <RecitationCredit source={source} />
       {summary ? <Text style={[styles.credit, { color: colors.text }]}>{summary}</Text> : null}
       <View style={styles.actions}>
         {actions.map(({ label, onPress }) => (
@@ -57,6 +55,27 @@ export function RecitationBar({
         </Text>
       ) : null}
     </View>
+  );
+}
+
+/** Credits the reciter and the audio provider, wherever recitation can be played. */
+export function RecitationCredit({ source }: { source: AudioSource }) {
+  const colors = useColors();
+  return (
+    <Text style={[styles.credit, { color: colors.muted }]}>
+      {`Recitation by ${source.reciter.name}, audio from ${source.provider.name}.`}
+    </Text>
+  );
+}
+
+/** Says when the recitation could not be played. */
+export function RecitationError({ error }: { error: string | null }) {
+  const colors = useColors();
+  if (!error) return null;
+  return (
+    <Text style={[styles.credit, { color: colors.muted }]}>
+      Couldn&apos;t play the recitation. Check your connection.
+    </Text>
   );
 }
 

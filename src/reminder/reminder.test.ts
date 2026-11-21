@@ -1,4 +1,4 @@
-import { DEFAULT_READING_SETTINGS } from '../settings/settings';
+import { DEFAULT_APP_SETTINGS } from '../settings/settings';
 import {
   formatReminderTime,
   reminderAction,
@@ -6,7 +6,7 @@ import {
   stepReminderTime,
 } from './reminder';
 
-const settings = DEFAULT_READING_SETTINGS;
+const settings = DEFAULT_APP_SETTINGS;
 
 describe('offering the reminder', () => {
   it('is offered when a session is completed and it has not been offered before', () => {

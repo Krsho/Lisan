@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 
 import { SettingsProvider } from '../settings/SettingsContext';
-import { DEFAULT_READING_SETTINGS, type ReadingSettings } from '../settings/settings';
+import { DEFAULT_APP_SETTINGS, type AppSettings } from '../settings/settings';
 import { AyahTranslation } from './AyahTranslation';
 
 const ayah = {
@@ -12,12 +12,10 @@ const ayah = {
   tafsir: '4. He is the Master of the day of Judgement.',
 };
 
-const withSettings = (patch: Partial<ReadingSettings>) =>
+const withSettings = (patch: Partial<AppSettings>) =>
   function Wrapper({ children }: { children: ReactNode }) {
     return (
-      <SettingsProvider
-        value={{ settings: { ...DEFAULT_READING_SETTINGS, ...patch }, update() {} }}
-      >
+      <SettingsProvider value={{ settings: { ...DEFAULT_APP_SETTINGS, ...patch }, update() {} }}>
         {children}
       </SettingsProvider>
     );

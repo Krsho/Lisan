@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { SettingsProvider } from './SettingsContext';
 import { SettingsScreen } from './SettingsScreen';
-import { DEFAULT_READING_SETTINGS } from './settings';
+import { DEFAULT_APP_SETTINGS } from './settings';
 
 // The Quran font is kept out of git (see src/theme/quranFont.ts), so CI has no file to load.
 jest.mock('../../assets/fonts/UthmanicHafs-v9.otf', () => 1, { virtual: true });
@@ -14,7 +14,7 @@ const notifications =
 beforeEach(() => jest.clearAllMocks());
 
 describe('daily reminder', () => {
-  const renderSettings = async (settings = DEFAULT_READING_SETTINGS) => {
+  const renderSettings = async (settings = DEFAULT_APP_SETTINGS) => {
     const update = jest.fn();
     await render(
       <SettingsProvider value={{ settings, update }}>
@@ -59,7 +59,7 @@ describe('daily reminder', () => {
 
   it('changes the time and turns off', async () => {
     const update = await renderSettings({
-      ...DEFAULT_READING_SETTINGS,
+      ...DEFAULT_APP_SETTINGS,
       reminderEnabled: true,
       reminderTime: 7 * 60,
     });
@@ -79,7 +79,7 @@ describe('daily reminder', () => {
 it('changes the theme, font size and default visibility', async () => {
   const update = jest.fn();
   await render(
-    <SettingsProvider value={{ settings: DEFAULT_READING_SETTINGS, update }}>
+    <SettingsProvider value={{ settings: DEFAULT_APP_SETTINGS, update }}>
       <SettingsScreen />
     </SettingsProvider>,
   );
@@ -102,7 +102,7 @@ it('changes the theme, font size and default visibility', async () => {
 it('changes the daily pace', async () => {
   const update = jest.fn();
   await render(
-    <SettingsProvider value={{ settings: DEFAULT_READING_SETTINGS, update }}>
+    <SettingsProvider value={{ settings: DEFAULT_APP_SETTINGS, update }}>
       <SettingsScreen />
     </SettingsProvider>,
   );

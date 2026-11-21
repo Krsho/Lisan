@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { addAyahToReview, type AyahLemmas, type EventDraft, type ReviewEvent } from '../engine';
-import { currentNow } from '../session/usePath';
+import { addAyahToReview, type AyahLemmas, type EventDraft, type LogEvent } from '../engine';
+import { currentNow } from '../clock/clock';
 import { useColors } from '../theme/colors';
 
 type Props = {
   ayah: AyahLemmas;
   /** The learner's log, to tell which of the ayah's words are already in review. */
-  events: ReviewEvent[];
+  events: LogEvent[];
   record(drafts: EventDraft[]): Promise<void>;
 };
 

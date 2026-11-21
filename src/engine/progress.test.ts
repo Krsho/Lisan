@@ -7,7 +7,7 @@ import {
   streak,
   type EventDraft,
   type Now,
-  type ReviewEvent,
+  type LogEvent,
 } from '.';
 
 // 21 November 2026, 09:00 UTC.
@@ -37,14 +37,14 @@ const content = {
 };
 
 let nextId = 0;
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
 /** The log after a session completed at each of the given moments, in order. */
-function sessionsAt(...moments: Now[]): ReviewEvent[] {
-  let log: ReviewEvent[] = [];
+function sessionsAt(...moments: Now[]): LogEvent[] {
+  let log: LogEvent[] = [];
   for (const now of moments) {
     const plan = planSession(content, log, { pace: 'light' }, now);
     log = record(log, completeSession(plan, log, now));
@@ -52,7 +52,7 @@ function sessionsAt(...moments: Now[]): ReviewEvent[] {
   return log;
 }
 
-const passages = (log: ReviewEvent[], now = at(START)) =>
+const passages = (log: LogEvent[], now = at(START)) =>
   planSession(content, log, { pace: 'light' }, now).newMaterial.map((p) => `${p.surah}:${p.ayah}`);
 
 describe('choosing a later start point', () => {
@@ -168,7 +168,7 @@ describe('the streak', () => {
 
   it('places events recorded before offsets were stored by the current offset', () => {
     const log = sessionsAt(at(START - DAY), at(START)).map(
-      ({ utcOffsetMinutes: _, ...e }) => e as ReviewEvent,
+      ({ utcOffsetMinutes: _, ...e }) => e as LogEvent,
     );
 
     expect(log.every((e) => e.utcOffsetMinutes === undefined)).toBe(true);

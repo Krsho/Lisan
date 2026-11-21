@@ -20,6 +20,8 @@ export type ContentStore = {
   fetchManifest(): Promise<unknown>;
   /** Downloads to a partial file for `databaseName`, never to the final name. */
   download(url: string, databaseName: string): Promise<void>;
+  /** Size of the partial file in bytes. */
+  size(databaseName: string): Promise<number>;
   /** Lowercase hex SHA-256 of the partial file. */
   sha256(databaseName: string): Promise<string>;
   /** Opens the partial file as SQLite: `PRAGMA integrity_check` and its meta content_version. */
@@ -52,6 +54,8 @@ async function verify(
   name: string,
   manifest: ContentManifest,
 ): Promise<string | null> {
+  const bytes = await store.size(name);
+  if (bytes !== manifest.bytes) return `size ${bytes} bytes, manifest says ${manifest.bytes}`;
   if ((await store.sha256(name)) !== manifest.sha256) return 'sha256 mismatch';
   const { integrity, contentVersion } = await store.probe(name);
   if (integrity !== 'ok') return `integrity check: ${integrity}`;
@@ -80,7 +84,7 @@ export async function checkForContentUpdate(
     return { status: 'failed', reason: `manifest: ${String(error)}` };
   }
   if (!manifest) return { status: 'failed', reason: 'invalid manifest' };
-  if (!isUpdateWanted(manifest, activeVersion, supportedSchema)) {
+  if (!isUpdateWanted(manifest, activeVersion, supportedSchema, state)) {
     await store.writeState(serialise({ ...state, checkedAt: now }));
     return { status: 'up-to-date' };
   }

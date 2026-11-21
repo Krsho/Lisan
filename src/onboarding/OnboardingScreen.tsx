@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { CenteredStatus } from '../async/CenteredStatus';
+import { currentNow } from '../clock/clock';
 import { useSurahs } from '../content/useSurahs';
 import { chooseStart, NEW_LEMMA_BUDGET, type Content, type Pace } from '../engine';
 import { PACE_LABELS } from '../settings/pace';
 import { useUpdateSettings } from '../settings/SettingsContext';
-import { currentNow, usePath } from '../session/usePath';
+import { usePath } from '../session/usePath';
 import { useColors } from '../theme/colors';
 import { useEventLog } from '../user/UserStoreProvider';
 
@@ -14,20 +16,11 @@ import { useEventLog } from '../user/UserStoreProvider';
  * No account is needed; finishing it stores the choices and opens today's session.
  */
 export function OnboardingScreen() {
-  const colors = useColors();
   const path = usePath();
   if (path.status !== 'loaded') {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {path.status === 'failed' ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load the path.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
-    );
+    return <CenteredStatus failed={path.status === 'failed'} message="Couldn't load the path." />;
   }
-  return <Onboarding content={path.content} />;
+  return <Onboarding content={path.data} />;
 }
 
 function Onboarding({ content }: { content: Content }) {
@@ -42,7 +35,7 @@ function Onboarding({ content }: { content: Content }) {
   const [start, setStart] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const name = (surah: number) =>
-    (surahs.status === 'loaded' && surahs.surahs.find((s) => s.surah === surah)?.nameEnglish) ||
+    (surahs.status === 'loaded' && surahs.data.find((s) => s.surah === surah)?.nameEnglish) ||
     `Surah ${surah}`;
 
   const finish = async () => {
@@ -170,7 +163,6 @@ function Option({ label, detail, selected, onPress }: OptionProps) {
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, gap: 12 },
   title: { fontSize: 24, fontWeight: '700' },
   heading: { fontSize: 18, fontWeight: '700', marginTop: 8 },

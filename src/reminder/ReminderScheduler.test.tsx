@@ -1,7 +1,7 @@
 import { render, waitFor } from '@testing-library/react-native';
 
 import { SettingsProvider } from '../settings/SettingsContext';
-import { DEFAULT_READING_SETTINGS, type ReadingSettings } from '../settings/settings';
+import { DEFAULT_APP_SETTINGS, type AppSettings } from '../settings/settings';
 import { ReminderScheduler } from './ReminderScheduler';
 
 jest.mock('expo-notifications', () => jest.requireActual('../testing/expoNotificationsMock'));
@@ -11,16 +11,16 @@ const notifications =
 
 beforeEach(() => jest.clearAllMocks());
 
-const app = (settings: ReadingSettings) => (
+const app = (settings: AppSettings) => (
   <SettingsProvider value={{ settings, update: jest.fn() }}>
     <ReminderScheduler />
   </SettingsProvider>
 );
 
-const on = { ...DEFAULT_READING_SETTINGS, reminderEnabled: true, reminderTime: 7 * 60 + 30 };
+const on = { ...DEFAULT_APP_SETTINGS, reminderEnabled: true, reminderTime: 7 * 60 + 30 };
 
 it('schedules nothing while the reminder is off', async () => {
-  await render(app(DEFAULT_READING_SETTINGS));
+  await render(app(DEFAULT_APP_SETTINGS));
 
   await waitFor(() =>
     expect(notifications.cancelAllScheduledNotificationsAsync).toHaveBeenCalled(),

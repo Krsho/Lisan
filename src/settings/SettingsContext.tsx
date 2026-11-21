@@ -1,11 +1,11 @@
 import { createContext, useContext, type ReactNode } from 'react';
 
-import { DEFAULT_READING_SETTINGS, type ReadingSettings } from './settings';
+import { DEFAULT_APP_SETTINGS, type AppSettings } from './settings';
 
 type SettingsValue = {
-  settings: ReadingSettings;
+  settings: AppSettings;
   /** Applies the change at once and stores it in the user database. */
-  update(patch: Partial<ReadingSettings>): void;
+  update(patch: Partial<AppSettings>): void;
 };
 
 const SettingsContext = createContext<SettingsValue | null>(null);
@@ -22,8 +22,8 @@ export function SettingsProvider({
 }
 
 /** The current settings; the defaults until the user database is open (e.g. loading screens). */
-export function useSettings(): ReadingSettings {
-  return useContext(SettingsContext)?.settings ?? DEFAULT_READING_SETTINGS;
+export function useSettings(): AppSettings {
+  return useContext(SettingsContext)?.settings ?? DEFAULT_APP_SETTINGS;
 }
 
 export function useUpdateSettings(): SettingsValue['update'] {

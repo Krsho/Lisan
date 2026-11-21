@@ -3,6 +3,7 @@ import {
   gradeAnswer,
   lemmaCards,
   markKnown,
+  NEVER_REVIEWED_LIMIT,
   planReview,
   planSession,
   RATING,
@@ -12,7 +13,7 @@ import {
   type PathAyah,
   type QuizContent,
   type Rating,
-  type ReviewEvent,
+  type LogEvent,
   type WordRef,
 } from '.';
 
@@ -68,12 +69,12 @@ const quizContent: QuizContent = {
 };
 
 let nextId = 0;
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
-const plan = (log: ReviewEvent[], time: number) =>
+const plan = (log: LogEvent[], time: number) =>
   planSession({ path }, log, { pace: 'normal' }, at(time));
 
 /** Answers on these lemmas at `time`, rated as given (a quiz or review question on each). */
@@ -92,7 +93,7 @@ const answer = (lemmaIds: string[], rating: Rating, time: number): EventDraft[] 
  * The learner's session at `time`: the planned new material is studied and completed, and the
  * quiz on its lemmas answered as `rating` (or, with null, left before any question).
  */
-function session(log: ReviewEvent[], time: number, rating: Rating | null = RATING.good) {
+function session(log: LogEvent[], time: number, rating: Rating | null = RATING.good) {
   const today = plan(log, time);
   const studied = record(log, completeSession(today, log, at(time)));
   if (rating === null) return studied;
@@ -107,8 +108,8 @@ function session(log: ReviewEvent[], time: number, rating: Rating | null = RATIN
 }
 
 /** A learner who studied ayahs 1–5 (40 lemmas) on days 0–4 and answered every quiz question. */
-function fortyLearned(): ReviewEvent[] {
-  let log: ReviewEvent[] = [];
+function fortyLearned(): LogEvent[] {
+  let log: LogEvent[] = [];
   for (let day = 0; day < 5; day++) log = session(log, START + day * DAY);
   return log;
 }
@@ -179,6 +180,19 @@ describe('the daily review', () => {
     expect(afterTenDays.newLemmas).toEqual(afterOneDay.newLemmas);
   });
 
+  it("does not bring today's quiz words back the same day, even when answered wrong", () => {
+    const today = plan([], START);
+    let log = record([], completeSession(today, [], at(START)));
+    const [missed, ...rest] = today.newLemmas.map((l) => l.lemmaId);
+    log = record(log, answer([missed], RATING.again, START + MINUTE));
+    log = record(log, answer(rest, RATING.good, START + MINUTE));
+
+    // "Keep going now", later the same day.
+    expect(plan(log, START + 2 * 60 * MINUTE).reviews).toEqual([]);
+    for (const card of lemmaCards(log).values())
+      expect(card.due).toBeGreaterThanOrEqual(START + MINUTE + DAY);
+  });
+
   it('reviews lemmas learned but never quizzed (the quiz was left early), first', () => {
     let log = session([], START, null);
     // Only the first three of ayah 1's words were answered before the learner left the quiz.
@@ -209,24 +223,48 @@ describe('the daily review', () => {
     expect(reviews).toHaveLength(WORDS - 1);
   });
 
-  it('reviews a lemma put in the deck by any other kind of event, such as adding from browse', () => {
-    // Any lemma event other than "I know this" (and taking it back) puts its lemma in the deck.
-    const added = {
-      id: 'browse-1',
-      deviceId: 'device-a',
-      kind: 'added-from-browse',
-      lemmaId: 'رَبّ',
-      wordRef: { surah: 2, ayah: 21, word: 3 },
-      timestamp: START,
-    } as unknown as ReviewEvent;
+  describe('with many cards never reviewed (added from browse)', () => {
+    const addedAt = START + 29 * DAY;
+    const added = (count: number): LogEvent[] =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `added-${i}`,
+        deviceId: 'device-a',
+        kind: 'added',
+        lemmaId: `browsed-${i}`,
+        wordRef: { surah: 2, ayah: 255, word: i + 1 },
+        timestamp: addedAt,
+      }));
+    const isAdded = (r: { lemmaId: string }) => r.lemmaId.startsWith('browsed-');
 
-    expect(plan([added], START + MINUTE).reviews).toEqual([
-      { lemmaId: 'رَبّ', wordRef: { surah: 2, ayah: 21, word: 3 } },
-    ]);
+    it(`gives them at most ${NEVER_REVIEWED_LIMIT} of the review when learned cards are due`, () => {
+      const log = [...fortyLearned(), ...added(30)];
+
+      const { reviews } = plan(log, START + 30 * DAY);
+
+      expect(reviews).toHaveLength(REVIEW_LIMIT);
+      expect(reviews.filter(isAdded)).toHaveLength(NEVER_REVIEWED_LIMIT);
+    });
+
+    it('fills the review with them when few learned cards are due', () => {
+      // Ayah 1's words were all reviewed on day 29; only the two forgotten then are due on day 31.
+      const forgotten = [lemmaAt(1, 7), lemmaAt(1, 8)];
+      let log = session([], START);
+      log = record(log, answer(lemmasOf(1).slice(0, 6), RATING.good, START + 29 * DAY));
+      log = record(log, answer(forgotten, RATING.again, START + 29 * DAY));
+      log = [...log, ...added(30)];
+
+      const { reviews } = plan(log, START + 31 * DAY);
+
+      expect(reviews).toHaveLength(REVIEW_LIMIT);
+      expect(reviews.filter((r) => !isAdded(r)).map((r) => r.lemmaId)).toEqual(
+        expect.arrayContaining(forgotten),
+      );
+      expect(reviews.filter(isAdded)).toHaveLength(REVIEW_LIMIT - forgotten.length);
+    });
   });
 
   it('reviews a lemma added to review from a browsed ayah, due at once', () => {
-    const added: ReviewEvent = {
+    const added: LogEvent = {
       id: 'added-1',
       deviceId: 'device-a',
       kind: 'added',
@@ -244,8 +282,8 @@ describe('the daily review', () => {
 
 describe('the recap after a gap', () => {
   /** Ayahs 1–4 studied on days 0–3, then the first half of ayah 5 on day 4. */
-  function studied(): ReviewEvent[] {
-    let log: ReviewEvent[] = [];
+  function studied(): LogEvent[] {
+    let log: LogEvent[] = [];
     for (let day = 0; day < 4; day++) log = session(log, START + day * DAY);
     return record(log, [
       ...lemmasOf(5)
@@ -266,7 +304,7 @@ describe('the recap after a gap', () => {
   }
   const lastSession = START + 4 * DAY;
 
-  const recapOf = (log: ReviewEvent[], time: number) =>
+  const recapOf = (log: LogEvent[], time: number) =>
     plan(log, time).recap.map((p) => `${p.surah}:${p.ayah}:${p.fromWord}-${p.toWord}`);
 
   it('is not given to a new learner', () => {

@@ -8,7 +8,8 @@ import {
 } from 'ts-fsrs/middlewares';
 import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6';
 
-import { chronological, type ReviewEvent, type WordRef } from './events';
+import { chronological, EVENT_KINDS, RATING, type LogEvent, type WordRef } from './events';
+import { DAY_MS } from './time';
 
 // FSRS-6 with its default weights, built synchronously (DefaultScheduler loads the model with a
 // dynamic import). Fuzz is off, so replaying the same log gives the same schedule on every device.
@@ -22,7 +23,8 @@ const scheduler = defineScheduler({ model: FSRS6Model, chrono: dateChrono })
     // The config type is generic; ts-fsrs validates it when the scheduler is created.
     config: {
       weights: FSRS6_DEFAULT_WEIGHTS,
-      enableShortTerm: true,
+      // A once-a-day app: no same-day learning steps, so every answer schedules a day or more out.
+      enableShortTerm: false,
       numRelearningSteps: 1,
       fractionalDays: false,
       desiredRetention: 0.9,
@@ -61,17 +63,9 @@ export type LemmaCard = {
   lastReview: number | null;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Whether an event puts its lemma in the review deck. Every lemma event does (learned in a
- * session, answered in a quiz or review, or added to review some other way), except "I know this"
- * and taking it back, which say nothing about having learned the lemma.
- */
-export function entersReview(
-  event: ReviewEvent,
-): event is Extract<ReviewEvent, { lemmaId: string }> {
-  return event.lemmaId !== null && event.kind !== 'known' && event.kind !== 'known-undone';
+/** Whether an event puts its lemma in the review deck (see EVENT_KINDS). */
+export function entersReview(event: LogEvent): event is Extract<LogEvent, { lemmaId: string }> {
+  return EVENT_KINDS[event.kind].entersReview && event.lemmaId !== null;
 }
 
 /**
@@ -81,7 +75,7 @@ export function entersReview(
  * marked "I know this" keep their card here; the session leaves them out. Cards are never stored,
  * so merged logs reschedule consistently.
  */
-export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
+export function lemmaCards(log: LogEvent[]): Map<string, LemmaCard> {
   const ordered = chronological(log);
   // When each lemma entered the deck, and the word form its card shows: where the lemma was first
   // met (learned or added), or else where it was first asked.
@@ -102,8 +96,15 @@ export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
     const now = new Date(event.timestamp);
     // Cards are keyed by lemma here. ts-fsrs only gives cards ids of its own (with crypto, which
     // Hermes lacks) in its fuzzing middleware, which is not used.
-    const current = cards.get(event.lemmaId) ?? scheduler.newCard({ now });
-    const { card } = scheduler.review({ card: current, grade: event.rating as Grade, now });
+    const current = cards.get(event.lemmaId);
+    // A card's first answer (usually the quiz on the day it was learned) counts as good at best:
+    // a quick right answer then shows the word was just seen, not that it is known.
+    const grade = current ? event.rating : Math.min(event.rating, RATING.good);
+    const { card } = scheduler.review({
+      card: current ?? scheduler.newCard({ now }),
+      grade: grade as Grade,
+      now,
+    });
     cards.set(event.lemmaId, card);
   }
 

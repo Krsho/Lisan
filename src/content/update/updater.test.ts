@@ -14,7 +14,7 @@ const manifest = {
   bytes: 100,
 };
 
-type FakeFile = { sha256: string; integrity: string; contentVersion: string | null };
+type FakeFile = { bytes: number; sha256: string; integrity: string; contentVersion: string | null };
 
 /** An in-memory content store: installed databases, partial downloads and the state file. */
 function fakeStore(options: { manifest?: unknown; download?: FakeFile | Error; state?: string }) {
@@ -39,9 +39,12 @@ function fakeStore(options: { manifest?: unknown; download?: FakeFile | Error; s
       return options.manifest ?? manifest;
     },
     async download(_url: string, databaseName: string) {
-      const result = options.download ?? { sha256: SHA, integrity: 'ok', contentVersion: '6' };
+      const result = options.download ?? good();
       if (result instanceof Error) throw result;
       partials.set(databaseName, result);
+    },
+    async size(databaseName: string) {
+      return partials.get(databaseName)!.bytes;
     },
     async sha256(databaseName: string) {
       return partials.get(databaseName)!.sha256;
@@ -78,6 +81,7 @@ describe('checking for a content update', () => {
 
   it.each([
     ['the download fails', { download: new Error('network lost') }],
+    ['the file is not the size the manifest says', { download: { ...good(), bytes: 99 } }],
     ['the file does not match the sha256', { download: { ...good(), sha256: 'c'.repeat(64) } }],
     ['the file is not a sound database', { download: { ...good(), integrity: 'malformed' } }],
     ['the file holds another content version', { download: { ...good(), contentVersion: '5' } }],
@@ -89,6 +93,17 @@ describe('checking for a content update', () => {
     expect(store.files.size).toBe(0);
     expect(store.partials.size).toBe(0);
     expect(parseUpdateState(store.state).active).toBe(5);
+  });
+
+  it('does not download again a version that was installed but would not open', async () => {
+    const store = fakeStore({
+      state: JSON.stringify({ active: null, checkedAt: NOW - 2 * DAY, rejected: [6] }),
+    });
+
+    await expect(run(store)).resolves.toEqual({ status: 'up-to-date' });
+
+    expect(store.files.size).toBe(0);
+    expect(parseUpdateState(store.state).rejected).toEqual([6]);
   });
 
   it('ignores a database with a schema this app build cannot read', async () => {
@@ -126,5 +141,5 @@ describe('checking for a content update', () => {
 });
 
 function good(): FakeFile {
-  return { sha256: SHA, integrity: 'ok', contentVersion: '6' };
+  return { bytes: 100, sha256: SHA, integrity: 'ok', contentVersion: '6' };
 }

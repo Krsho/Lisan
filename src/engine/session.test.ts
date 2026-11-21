@@ -2,19 +2,21 @@ import {
   completeSession,
   markKnown,
   planSession,
+  SESSION_WORD_LIMIT,
+  streak,
   undoKnown,
   type EventDraft,
   type PathAyah,
-  type ReviewEvent,
+  type LogEvent,
   type SessionPlan,
-  type Settings,
+  type PlanSettings,
 } from '.';
 
 // A fixed clock: 21 November 2026, 09:00 UTC, in UTC.
 const DAY = 24 * 60 * 60 * 1000;
 const START = Date.UTC(2026, 10, 21, 9);
 const at = (time: number, utcOffsetMinutes = 0) => ({ time, utcOffsetMinutes });
-const normal: Settings = { pace: 'normal' };
+const normal: PlanSettings = { pace: 'normal' };
 
 /** An ayah whose words have the given lemmas, e.g. ayah(1, 1, ['b', 'ism'], ['allah']). */
 const ayah = (surah: number, number: number, ...words: string[][]): PathAyah => ({
@@ -42,14 +44,14 @@ const content = {
 
 let nextId = 0;
 /** The log after the drafts are recorded on this device. */
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
 /** Completes `days` daily sessions in a row, one each day from START. */
 function studyDays(days: number, c = content, settings = normal) {
-  let log: ReviewEvent[] = [];
+  let log: LogEvent[] = [];
   const plans: SessionPlan[] = [];
   for (let day = 0; day < days; day++) {
     const now = at(START + day * DAY);
@@ -142,12 +144,37 @@ describe('the daily new-ayah session', () => {
   it('sets the budget from the pace', () => {
     const path = { path: [ayahOfNewWords(2, 282, 40, 'w')] };
 
-    const budget = (pace: Settings['pace']) =>
+    const budget = (pace: PlanSettings['pace']) =>
       planSession(path, [], { pace }, at(START)).newLemmas.length;
 
     expect(budget('light')).toBeLessThan(budget('normal'));
     expect(budget('normal')).toBe(15);
     expect(budget('intense')).toBeGreaterThan(budget('normal'));
+  });
+
+  it('keeps a session short through ayahs whose words are all known', () => {
+    // Thirty ayahs of five words, every lemma already marked "I know this": none is new, so the
+    // budget of new lemmas alone would put the whole path in one session.
+    const known = { path: Array.from({ length: 30 }, (_, i) => ayahOfNewWords(3, i + 1, 5, 'k')) };
+    const log = record(
+      [],
+      [1, 2, 3, 4, 5].map((i) => markKnown(`k${i}`, { surah: 3, ayah: 1, word: i }, at(START))),
+    );
+
+    const plan = planSession(known, log, normal, at(START + 1000));
+
+    const words = plan.newMaterial.reduce((n, p) => n + p.toWord - p.fromWord + 1, 0);
+    expect(words).toBe(SESSION_WORD_LIMIT.normal);
+    expect(plan.newMaterial[0]).toMatchObject({ ayah: 1, fromWord: 1 });
+  });
+
+  it('splits a long ayah of known words at the session word limit', () => {
+    const long = { path: [ayah(2, 282, ...Array.from({ length: 100 }, () => ['known']))] };
+    const log = record([], [markKnown('known', { surah: 2, ayah: 282, word: 1 }, at(START))]);
+
+    const plan = planSession(long, log, normal, at(START + 1000));
+
+    expect(passages(plan)).toEqual([`2:282:1-${SESSION_WORD_LIMIT.normal}`]);
   });
 
   it('has no new material once the path is finished', () => {
@@ -235,6 +262,18 @@ describe('completing a session', () => {
       false,
     );
     expect(planSession(content, log, normal, at(START + DAY)).completedToday).toBe(false);
+  });
+
+  it('counts a session on the local day where it happened, after travelling', () => {
+    // Completed at 20:00 in New York (UTC-5), then a flight to Tokyo (UTC+9): two hours later it
+    // is noon of the next day there, and that day's session is still to do, as the streak says.
+    const newYorkEvening = Date.UTC(2026, 10, 22, 1);
+    const plan = planSession(content, [], normal, at(newYorkEvening, -300));
+    const log = record([], completeSession(plan, [], at(newYorkEvening, -300)));
+
+    const tokyoNoon = at(newYorkEvening + 2 * 3600_000, 540);
+    expect(planSession(content, log, normal, tokyoNoon).completedToday).toBe(false);
+    expect(streak(log, tokyoNoon)).toBe(1);
   });
 
   it('is not done for a new learner', () => {
