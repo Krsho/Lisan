@@ -200,7 +200,12 @@ describe('progress', () => {
   });
 
   it('counts an ayah only once it is studied to its end', () => {
-    const long = { path: [ayah(1, 1, ...Array.from({ length: 15 }, (_, i) => [`w${i}`]))] };
+    const words = ayah(1, 1, ...Array.from({ length: 15 }, (_, i) => [`w${i}`]));
+    const parts = [
+      { fromWord: 1, toWord: 10 },
+      { fromWord: 11, toWord: 15 },
+    ];
+    const long = { path: [{ ...words, parts }] };
     const plan = planSession(long, [], { pace: 'light' }, at(START));
     const log = record([], completeSession(plan, [], at(START)));
 
