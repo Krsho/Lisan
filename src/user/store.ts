@@ -173,11 +173,16 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
       );
     },
 
-    /** Where the learner last was in a surah in Browse; null if they haven't browsed it. */
+    /**
+     * Where the learner last was in a surah in Browse; null if they haven't browsed it. Read after
+     * the writes before it, since places are saved without waiting.
+     */
     async getBrowsePosition(surah: number): Promise<BrowsePosition | null> {
-      const [row] = await db.all<{ ayah: number; part: number | null }>(
-        'SELECT ayah, part FROM browse_positions WHERE surah = ?',
-        [surah],
+      const [row] = await serially(() =>
+        db.all<{ ayah: number; part: number | null }>(
+          'SELECT ayah, part FROM browse_positions WHERE surah = ?',
+          [surah],
+        ),
       );
       if (!row) return null;
       return { surah, ayah: row.ayah, ...(row.part === null ? {} : { part: row.part }) };

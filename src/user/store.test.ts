@@ -326,6 +326,17 @@ describe('browse positions in the user database', () => {
     expect(await again.getBrowsePosition(1)).toEqual({ surah: 1, ayah: 4 });
   });
 
+  it('reads back a place saved in the background, even while other writes are waiting', async () => {
+    const store = await openStore();
+    await store.saveBrowsePosition({ surah: 2, ayah: 5 }, 1);
+
+    // Neither write is awaited, as the app saves places: the read must still see the new one.
+    void store.record([{ kind: 'learn', lemmaId: 'رَحِيم', wordRef: fatiha, timestamp: 2 }]);
+    void store.saveBrowsePosition({ surah: 2, ayah: 6 }, 3);
+
+    expect(await store.getBrowsePosition(2)).toEqual({ surah: 2, ayah: 6 });
+  });
+
   it('records no learning events', async () => {
     const store = await openStore();
 
