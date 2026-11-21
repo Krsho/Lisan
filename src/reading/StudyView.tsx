@@ -134,7 +134,6 @@ export function StudyView({
         <View onLayout={(e) => (cardsTop.current = e.nativeEvent.layout.y)} style={styles.cards}>
           <WordCards
             passage={passage}
-            colors={colors}
             highlighted={highlighted}
             renderWordExtra={renderWordExtra}
             onCardLayout={(position, y) => cardTops.current.set(position, y)}
@@ -189,20 +188,21 @@ function AyahText({ words, ayahNumber, highlighted, onPressWord }: AyahTextProps
 }
 
 type WordCardsProps = {
-  passage: StudyPassage;
-  colors: Colors;
-  highlighted: number | null;
+  /** The words to give cards, and the ayah their details are in. */
+  passage: Pick<StudyPassage, 'surah' | 'ayah' | 'words'>;
+  highlighted?: number | null;
   renderWordExtra?: (word: Word) => ReactNode;
-  onCardLayout: (position: number, y: number) => void;
+  onCardLayout?: (position: number, y: number) => void;
 };
 
-function WordCards({
+/** A card for each word: its meaning and its breakdown. Also used for the Basmala in Browse. */
+export function WordCards({
   passage,
-  colors,
-  highlighted,
+  highlighted = null,
   renderWordExtra,
   onCardLayout,
 }: WordCardsProps) {
+  const colors = useColors();
   const content = useContent();
   const { surah, ayah, words } = passage;
   const key = words.map((w) => w.position).join(',');
@@ -228,7 +228,10 @@ function WordCards({
   }
   const [details, concepts] = state.data;
   return details.map((word, i) => (
-    <View key={word.position} onLayout={(e) => onCardLayout(word.position, e.nativeEvent.layout.y)}>
+    <View
+      key={word.position}
+      onLayout={(e) => onCardLayout?.(word.position, e.nativeEvent.layout.y)}
+    >
       <WordCard
         word={word}
         concepts={concepts}

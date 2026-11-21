@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
 import { useAsync } from '../async/useAsync';
@@ -19,7 +19,7 @@ import { JumpToAyah } from './JumpToAyah';
 import { placeOf, studyPages, type StudyPage } from './pages';
 import { describePosition, pageIndexOf, type Place } from './position';
 import { StudyPager } from './StudyPager';
-import { StudyView } from './StudyView';
+import { StudyView, WordCards } from './StudyView';
 
 type Props = {
   summary: SurahSummary;
@@ -160,21 +160,50 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
   );
 }
 
-/** The Basmala heading a surah's first ayah. */
+/**
+ * The Basmala heading a surah's first ayah, compact; "Show breakdown" opens a card for each of its
+ * words, as in Al-Fatiha 1:1, where they are from.
+ */
 function Basmala({ words }: { words: LinkedWord[] }) {
   const colors = useColors();
   const size = useQuranTextSize();
+  const [open, setOpen] = useState(false);
+  const [first] = words;
   return (
     <View style={[styles.basmala, { borderColor: colors.border }]}>
       <Text style={[styles.basmalaText, size.text(24, 46), { color: colors.muted }]}>
         {words.map((w) => w.text).join(' ')}
       </Text>
+      {first ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              open ? "Hide the Basmala's breakdown" : "Show the Basmala's breakdown"
+            }
+            accessibilityState={{ expanded: open }}
+            onPress={() => setOpen((o) => !o)}
+            hitSlop={8}
+          >
+            <Text style={[styles.toggle, { color: colors.accent }]}>
+              {open ? 'Hide breakdown' : 'Show breakdown'}
+            </Text>
+          </Pressable>
+          {open ? (
+            <View style={styles.basmalaCards}>
+              <WordCards passage={{ surah: first.ref.surah, ayah: first.ref.ayah, words }} />
+            </View>
+          ) : null}
+        </>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  basmala: { paddingBottom: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  basmala: { paddingBottom: 8, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  basmalaCards: { gap: 12 },
+  toggle: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
   // Sizes come from the font size setting (useQuranTextSize).
   basmalaText: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'center' },
 });
