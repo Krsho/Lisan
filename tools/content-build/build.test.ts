@@ -158,6 +158,66 @@ describe('content build', () => {
     expect(ayah.words[0].bare).toBe(ayah.words[0].text);
   });
 
+  it('keeps ayahs of up to 15 words whole, without parts', async () => {
+    const content = build();
+
+    // The longest sample ayah, 2:181, has 13 words.
+    expect(await content.getSurahParts(2)).toEqual([]);
+    expect(await content.getPathParts()).toEqual([]);
+  });
+
+  // The sample has no long ayah, so these builds use smaller parts: 2 to 6 words, at most 8.
+  const smallParts = { partSize: { min: 2, max: 6, limit: 8 } };
+
+  it('splits long ayahs into parts at pause marks, as word references', async () => {
+    const content = build(smallParts);
+
+    const parts = (await content.getSurahParts(2)).filter((p) => p.ayah === 2);
+
+    // ذَٰلِكَ ٱلۡكِتَٰبُ لَا رَيۡبَۛ | فِيهِۛ هُدٗى لِّلۡمُتَّقِينَ: after the first muʿānaqa mark ۛ.
+    expect(parts).toEqual([
+      {
+        surah: 2,
+        ayah: 2,
+        part: 1,
+        count: 2,
+        first: { surah: 2, ayah: 2, word: 1 },
+        last: { surah: 2, ayah: 2, word: 4 },
+      },
+      {
+        surah: 2,
+        ayah: 2,
+        part: 2,
+        count: 2,
+        first: { surah: 2, ayah: 2, word: 5 },
+        last: { surah: 2, ayah: 2, word: 7 },
+      },
+    ]);
+  });
+
+  it('splits a long ayah without pause marks into even parts', async () => {
+    const content = build(smallParts);
+
+    // 1:7 has 9 words and no marks, more than a part may hold.
+    const parts = (await content.getSurahParts(1)).filter((p) => p.ayah === 7);
+    expect(parts.map((p) => [p.first.word, p.last.word])).toEqual([
+      [1, 4],
+      [5, 9],
+    ]);
+  });
+
+  it('lists the parts of the long ayahs on the path, in path order', async () => {
+    const content = build(smallParts);
+
+    const parts = await content.getPathParts();
+
+    // 1:7 (9 words) is the only long ayah on the sample path; 2:2 and 2:181 are not on it.
+    expect(parts.map((p) => `${p.surah}:${p.ayah} part ${p.part} of ${p.count}`)).toEqual([
+      '1:7 part 1 of 2',
+      '1:7 part 2 of 2',
+    ]);
+  });
+
   it('shows two text tokens as one word where the corpus counts one (بَعۡدَ مَا in 2:181)', async () => {
     const content = build();
 

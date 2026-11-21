@@ -7,6 +7,7 @@ import { translationsOf, type Glossary } from './glossary.ts';
 import { bareWord, parseKfgqpc, splitWords } from './kfgqpc.ts';
 import { parseMorphology, type Segment } from './morphology.ts';
 import type { NotesFile } from './notes.ts';
+import { PART_SIZE, splitAyahIntoParts, type PartSize } from './parts.ts';
 import { pathOrder } from './path.ts';
 import type { QuranEncEdition } from './quranenc.ts';
 
@@ -29,6 +30,8 @@ export type BuildOptions = {
   tafsirs: Record<string, QuranEncEdition>;
   /** Authored linguistic notes (content/notes/), in every review status; only approved ones ship. */
   notes: NotesFile[];
+  /** How long ayahs are split into parts for study. Defaults to PART_SIZE. */
+  partSize?: PartSize;
   contentVersion: number;
   outFile: string;
 };
@@ -51,6 +54,13 @@ const SCHEMA = `
     -- The word without pause marks; NULL where that is the text itself.
     bare TEXT,
     PRIMARY KEY (surah, ayah, position)
+  ) WITHOUT ROWID;
+  -- Long ayahs split at pause marks, one study screen a part: words first_word to last_word.
+  -- An ayah without rows is studied whole.
+  CREATE TABLE ayah_parts (
+    surah INTEGER NOT NULL, ayah INTEGER NOT NULL, part INTEGER NOT NULL,
+    first_word INTEGER NOT NULL, last_word INTEGER NOT NULL,
+    PRIMARY KEY (surah, ayah, part)
   ) WITHOUT ROWID;
   CREATE TABLE segments (
     surah INTEGER NOT NULL, ayah INTEGER NOT NULL, word INTEGER NOT NULL, position INTEGER NOT NULL,
@@ -101,7 +111,8 @@ type EditionKind = 'translation' | 'tafsir';
 
 /** Builds the bundled content database. Throws if the sources disagree. */
 export function buildContentDatabase(options: BuildOptions): void {
-  const { contentVersion, outFile, glosses, glossary, alignment = WORD_ALIGNMENT } = options;
+  const { contentVersion, outFile, glosses, glossary } = options;
+  const { alignment = WORD_ALIGNMENT, partSize = PART_SIZE } = options;
   const ayahs = parseKfgqpc(options.quranText);
   const segmentsByAyah = groupByAyah(parseMorphology(options.morphologyText));
   const textAyahs = new Set(ayahs.map((a) => `${a.surah}:${a.ayah}`));
@@ -126,6 +137,7 @@ export function buildContentDatabase(options: BuildOptions): void {
     const insertSurah = db.prepare('INSERT INTO surahs VALUES (?, ?, ?, ?, ?)');
     const insertAyah = db.prepare('INSERT INTO ayahs VALUES (?, ?, ?, ?, ?)');
     const insertWord = db.prepare('INSERT INTO words VALUES (?, ?, ?, ?, ?)');
+    const insertPart = db.prepare('INSERT INTO ayah_parts VALUES (?, ?, ?, ?, ?)');
     const insertSegment = db.prepare('INSERT INTO segments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insertLemma = db.prepare('INSERT INTO lemmas VALUES (?, ?)');
     const insertGloss = db.prepare('INSERT INTO glosses VALUES (?, ?, ?, ?, ?)');
@@ -148,6 +160,13 @@ export function buildContentDatabase(options: BuildOptions): void {
       insertAyah.run(surah, ayah, quranAyah.juz, quranAyah.page, quranAyah.hizbQuarter ? 1 : 0);
 
       wordCounts.set(location, display.length);
+      const parts = splitAyahIntoParts(
+        display.map((word) => word.text),
+        partSize,
+      );
+      if (parts.length > 1) {
+        parts.forEach(({ first, last }, i) => insertPart.run(surah, ayah, i + 1, first, last));
+      }
       const targets = new Map<number, number>();
       glossTargets.set(location, targets);
       display.forEach((word, i) => {

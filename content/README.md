@@ -56,6 +56,7 @@ To get the QUL file: sign in at [qul.tarteel.ai](https://qul.tarteel.ai), open t
 
 - The text is shown as KFGQPC writes it. The build only removes what is not part of a word: the ayah-end glyph at the end of each ayah (the app draws ayah numbers itself) and the ۞ rubʿ al-ḥizb mark (kept as a flag on the ayah).
 - Pause marks (ۖ ۗ ۚ ۛ ۘ ۩) stay attached to the word they follow. Each word also has a `bare` form without them, for quiz and review cards.
+- Ayahs of more than 15 words are split into parts for study (`ayah_parts`, by `tools/content-build/parts.ts`): after pause marks, aiming for 8–15 words a part and allowing up to 18 rather than break between marks; a stretch longer than that is cut into even parts without one. Parts are word ranges (`surah:ayah:word`), so the session and Browse split at the same places.
 - The Basmala is ayah 1:1 only. Surahs 2–114 except 9 show it as a header (`surahs.has_basmala`), reusing the words of 1:1; it is not an ayah there.
 - Words are split on spaces and must line up with the corpus morphology. In seven ayahs KFGQPC's word boundaries differ from the corpus's (`بَعۡدَ مَا` in 2:181, 8:6, 13:37; `إِلۡ يَاسِينَ` in 37:130; `لَّوۡمَا` 15:7, `مَالِيَ` 27:20, `وَمَالِيَ` 36:22). These are listed in `tools/content-build/alignment.ts`: one displayed word covers whole text tokens and whole corpus words, and the text is never re-split. The build refuses any other mismatch.
 - QUL's word-by-word glosses use their own word numbering, which the same table maps onto the displayed words.
