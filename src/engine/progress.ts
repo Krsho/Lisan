@@ -1,13 +1,6 @@
-import type { LogEvent, WordRef } from './events';
-import {
-  eventDay,
-  knownLemmas,
-  learnedLemmas,
-  localDay,
-  pathPosition,
-  type Content,
-  type Now,
-} from './session';
+import { EVENT_KINDS, type LogEvent, type WordRef } from './events';
+import { knownLemmas, learnedLemmas, pathPosition, type Content } from './session';
+import { eventDay, localDay, type Now } from './time';
 
 export type Progress = {
   /** Path ayahs studied to their end; ones skipped by a chosen start point don't count. */
@@ -42,7 +35,7 @@ export function progress(content: Content, log: LogEvent[]): Progress {
 }
 
 /** Whether an event is part of a daily session: completing one, or answering a review or quiz. */
-const isSession = (e: LogEvent) => e.kind === 'completed' || e.kind === 'review';
+const isSession = (e: LogEvent) => EVENT_KINDS[e.kind].isSession;
 
 /**
  * How many local days in a row the learner has done a session, ending today, or yesterday when

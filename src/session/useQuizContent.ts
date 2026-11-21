@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { useContent } from '../content/ContentProvider';
 import type { Term } from '../content/repository';
-import type { NewLemma, QuizContent, QuizWord } from '../engine';
+import { wordRefKey, type NewLemma, type QuizContent, type QuizWord } from '../engine';
 
 export type QuizData = QuizContent & {
   /** Glossary terms by key, to name the options of grammar questions. */
@@ -11,8 +11,6 @@ export type QuizData = QuizContent & {
 
 export type QuizDataState =
   { status: 'loading' } | { status: 'failed' } | { status: 'loaded'; data: QuizData };
-
-const refKey = (l: NewLemma) => `${l.wordRef.surah}:${l.wordRef.ayah}:${l.wordRef.word}`;
 
 /**
  * What the quiz on these new lemmas is built from: their words with segments, every lemma to draw
@@ -24,7 +22,7 @@ export function useQuizContent(newLemmas: NewLemma[]): QuizDataState {
 
   useEffect(() => {
     let cancelled = false;
-    const refs = [...new Map(newLemmas.map((l) => [refKey(l), l.wordRef])).values()];
+    const refs = [...new Map(newLemmas.map((l) => [wordRefKey(l.wordRef), l.wordRef])).values()];
     Promise.all([
       Promise.all(refs.map((ref) => repository.getWordDetails(ref, 'en'))),
       repository.getLemmaSamples('en'),

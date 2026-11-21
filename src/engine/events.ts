@@ -78,14 +78,46 @@ export type LogEvent =
 
 export type EventKind = LogEvent['kind'];
 
+type KindTraits = {
+  /** Whether its events are about a lemma (lemmaId is set); the others have lemmaId null. */
+  hasLemma: boolean;
+  /**
+   * Whether it puts its lemma in the review deck: learned in a session, answered in a quiz or
+   * review, or added to review. "I know this" and taking it back say nothing about having
+   * learned the lemma.
+   */
+  entersReview: boolean;
+  /** Whether it is part of a daily session (completing one, or answering a review or quiz). */
+  isSession: boolean;
+};
+
+/** What each kind of event is, in one place for the engine and the user store. */
+export const EVENT_KINDS: Record<EventKind, KindTraits> = {
+  learn: { hasLemma: true, entersReview: true, isSession: false },
+  known: { hasLemma: true, entersReview: false, isSession: false },
+  'known-undone': { hasLemma: true, entersReview: false, isSession: false },
+  added: { hasLemma: true, entersReview: true, isSession: false },
+  completed: { hasLemma: false, entersReview: false, isSession: true },
+  start: { hasLemma: false, entersReview: false, isSession: false },
+  review: { hasLemma: true, entersReview: true, isSession: true },
+};
+
+/** Whether `kind` is one this app version knows (a newer one may have synced others). */
+export const isEventKind = (kind: string): kind is EventKind =>
+  Object.prototype.hasOwnProperty.call(EVENT_KINDS, kind);
+
 type Draft<E> = E extends LogEvent ? Omit<E, 'id' | 'deviceId'> : never;
 
 /** An event the engine decided on, before the user store gives it an id and the device id. */
 export type EventDraft = Draft<LogEvent>;
 
+/** Orders ids (or any strings) the same on every device, whatever its locale. */
+export const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A word's place as a map key, e.g. "1:2:3". */
+export const wordRefKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
+
 /** Events in the order they happened; ties (same millisecond) broken by id, so on every device alike. */
 export function chronological<E extends { timestamp: number; id: string }>(events: E[]): E[] {
-  return [...events].sort(
-    (a, b) => a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  );
+  return [...events].sort((a, b) => a.timestamp - b.timestamp || byId(a.id, b.id));
 }

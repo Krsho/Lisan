@@ -1,4 +1,4 @@
-import type { EventDraft, LogEvent } from '../engine';
+import { EVENT_KINDS, isEventKind, type EventDraft, type LogEvent } from '../engine';
 import type { SettingRow } from '../settings/settings';
 import type { SqlValue, UserSqlRunner } from './sql';
 
@@ -17,9 +17,6 @@ type EventRow = {
   utc_offset_minutes: number | null;
 };
 
-/** Kinds whose events are about a lemma; the others (completed, start) have none. */
-const LEMMA_KINDS = new Set<string>(['learn', 'known', 'known-undone', 'added', 'review']);
-const KINDS = new Set<string>([...LEMMA_KINDS, 'completed', 'start']);
 const RATINGS = new Set([1, 2, 3, 4]);
 
 /**
@@ -27,9 +24,9 @@ const RATINGS = new Set([1, 2, 3, 4]);
  * device), kept in the table but left out; 'invalid' for a row not valid for its kind.
  */
 function toEvent(row: EventRow): LogEvent | 'unknown' | 'invalid' {
-  if (!KINDS.has(row.kind)) return 'unknown';
+  if (!isEventKind(row.kind)) return 'unknown';
   if (row.surah === null || row.ayah === null || row.word === null) return 'invalid';
-  if (LEMMA_KINDS.has(row.kind) !== (row.lemma_id !== null)) return 'invalid';
+  if (EVENT_KINDS[row.kind].hasLemma !== (row.lemma_id !== null)) return 'invalid';
   const base = {
     id: row.id,
     lemmaId: row.lemma_id,

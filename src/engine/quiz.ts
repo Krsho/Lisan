@@ -1,5 +1,7 @@
 import {
+  byId,
   RATING,
+  wordRefKey,
   type EventDraft,
   type GradedEvent,
   type Rating,
@@ -7,7 +9,8 @@ import {
   type WordRef,
 } from './events';
 import { lemmaCards } from './cards';
-import { knownLemmas, type Now, type SessionPlan } from './session';
+import { knownLemmas, type SessionPlan } from './session';
+import { stamp, type Now } from './time';
 
 /** One morphological piece of a word, with its glossary term keys (e.g. "case.genitive"). */
 export type QuizSegment = { text: string; lemma: string | null; terms: string[] };
@@ -154,12 +157,7 @@ function similarLemmas(
         e.sample !== null && e.lemmaId !== target.lemmaId && !exclude.has(e.lemmaId),
     )
     .map((e) => ({ e, samePos: e.partOfSpeech === target.partOfSpeech ? 0 : 1, d: distance(e) }))
-    .sort(
-      (a, b) =>
-        a.samePos - b.samePos ||
-        a.d - b.d ||
-        (a.e.lemmaId < b.e.lemmaId ? -1 : a.e.lemmaId > b.e.lemmaId ? 1 : 0),
-    )
+    .sort((a, b) => a.samePos - b.samePos || a.d - b.d || byId(a.e.lemmaId, b.e.lemmaId))
     .map(({ e }) => e);
 }
 
@@ -275,8 +273,6 @@ function grammarItem(t: Target): QuizItem | null {
   };
 }
 
-const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
-
 /**
  * The quiz after today's new ayah(s): one question per new lemma, in the order they were met,
  * leaving out lemmas the learner has marked "I know this". Question types take turns (Arabic →
@@ -312,13 +308,13 @@ function questionsFor(
   /** Which question type to try first for a lemma (an index into QUIZ_TYPES, wrapped). */
   firstType: (lemmaId: string, index: number) => number,
 ): QuizItem[] {
-  const words = new Map(content.words.map((w) => [refKey(w.ref), w]));
+  const words = new Map(content.words.map((w) => [wordRefKey(w.ref), w]));
   const entries = new Map(content.lemmas.map((e) => [e.lemmaId, e]));
   const items: QuizItem[] = [];
 
   for (const { lemmaId, wordRef } of targets) {
     if (known.has(lemmaId)) continue;
-    const word = words.get(refKey(wordRef));
+    const word = words.get(wordRefKey(wordRef));
     const segment = word?.segments.find((s) => s.lemma === lemmaId);
     if (!word || !segment) continue;
     const entry = entries.get(lemmaId);
@@ -385,7 +381,6 @@ export function gradeAnswer(
     rating: ratingFor(correct, responseTimeMs),
     correct,
     responseTimeMs: Math.max(0, Math.round(responseTimeMs)),
-    timestamp: now.time,
-    utcOffsetMinutes: now.utcOffsetMinutes,
+    ...stamp(now),
   };
 }

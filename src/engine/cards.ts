@@ -8,7 +8,8 @@ import {
 } from 'ts-fsrs/middlewares';
 import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6';
 
-import { chronological, RATING, type LogEvent, type WordRef } from './events';
+import { chronological, EVENT_KINDS, RATING, type LogEvent, type WordRef } from './events';
+import { DAY_MS } from './time';
 
 // FSRS-6 with its default weights, built synchronously (DefaultScheduler loads the model with a
 // dynamic import). Fuzz is off, so replaying the same log gives the same schedule on every device.
@@ -62,15 +63,9 @@ export type LemmaCard = {
   lastReview: number | null;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Whether an event puts its lemma in the review deck. Every lemma event does (learned in a
- * session, answered in a quiz or review, or added to review some other way), except "I know this"
- * and taking it back, which say nothing about having learned the lemma.
- */
+/** Whether an event puts its lemma in the review deck (see EVENT_KINDS). */
 export function entersReview(event: LogEvent): event is Extract<LogEvent, { lemmaId: string }> {
-  return event.lemmaId !== null && event.kind !== 'known' && event.kind !== 'known-undone';
+  return EVENT_KINDS[event.kind].entersReview && event.lemmaId !== null;
 }
 
 /**

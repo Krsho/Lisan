@@ -223,22 +223,6 @@ describe('the daily review', () => {
     expect(reviews).toHaveLength(WORDS - 1);
   });
 
-  it('reviews a lemma put in the deck by any other kind of event, such as adding from browse', () => {
-    // Any lemma event other than "I know this" (and taking it back) puts its lemma in the deck.
-    const added = {
-      id: 'browse-1',
-      deviceId: 'device-a',
-      kind: 'added-from-browse',
-      lemmaId: 'رَبّ',
-      wordRef: { surah: 2, ayah: 21, word: 3 },
-      timestamp: START,
-    } as unknown as LogEvent;
-
-    expect(plan([added], START + MINUTE).reviews).toEqual([
-      { lemmaId: 'رَبّ', wordRef: { surah: 2, ayah: 21, word: 3 } },
-    ]);
-  });
-
   describe('with many cards never reviewed (added from browse)', () => {
     const addedAt = START + 29 * DAY;
     const added = (count: number): LogEvent[] =>

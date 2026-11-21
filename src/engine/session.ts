@@ -1,8 +1,14 @@
 import { lemmaCards, retrievability, type LemmaCard } from './cards';
-import { chronological, type EventDraft, type LogEvent, type WordRef } from './events';
-
-/** The moment to plan for, with the learner's UTC offset there, which sets where a day begins. */
-export type Now = { time: number; utcOffsetMinutes: number };
+import {
+  byId,
+  chronological,
+  EVENT_KINDS,
+  wordRefKey,
+  type EventDraft,
+  type LogEvent,
+  type WordRef,
+} from './events';
+import { eventDay, localDay, stamp, type Now } from './time';
 
 /** An ayah on the curated path, with the lemmas of each of its words. */
 export type PathAyah = {
@@ -81,20 +87,6 @@ export type SessionPlan = {
   completedToday: boolean;
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** The local day number, counted from the epoch, of a moment at the given UTC offset. */
-export const localDay = (time: number, utcOffsetMinutes: number) =>
-  Math.floor((time + utcOffsetMinutes * 60_000) / DAY_MS);
-
-/**
- * The local day an event happened on, where it happened: by the UTC offset it was recorded with,
- * so days stay right after travelling. Events recorded before offsets were stored fall back to
- * `fallbackOffset` (the learner's current one).
- */
-export const eventDay = (event: LogEvent, fallbackOffset: number) =>
-  localDay(event.timestamp, event.utcOffsetMinutes ?? fallbackOffset);
-
 /** The lemmas the learner marked "I know this" and has not taken back. */
 export function knownLemmas(log: LogEvent[]): Set<string> {
   const known = new Set<string>();
@@ -109,8 +101,6 @@ export function knownLemmas(log: LogEvent[]): Set<string> {
 export function learnedLemmas(log: LogEvent[]): Set<string> {
   return new Set(log.flatMap((e) => (e.kind === 'learn' ? [e.lemmaId] : [])));
 }
-
-const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
 
 /** A place on the path: the index of an ayah in it, and of a word in that ayah (both from 0). */
 export type PathPoint = { ayah: number; word: number };
@@ -133,14 +123,14 @@ export function pathPosition(path: PathAyah[], log: LogEvent[]): PathPosition {
   const index = new Map<string, PathPoint>();
   path.forEach((a, ayah) =>
     a.words.forEach((w, word) =>
-      index.set(refKey({ surah: a.surah, ayah: a.ayah, word: w.position }), { ayah, word }),
+      index.set(wordRefKey({ surah: a.surah, ayah: a.ayah, word: w.position }), { ayah, word }),
     ),
   );
   let furthest: PathPoint | null = null;
   let chosen: PathPoint | null = null;
   for (const event of chronological(log)) {
     // A word no longer on the path (the content changed) says nothing about progress.
-    const at = index.get(refKey(event.wordRef));
+    const at = index.get(wordRefKey(event.wordRef));
     if (!at) continue;
     if (event.kind === 'completed' && (!furthest || isAfter(at, furthest))) furthest = at;
     // The latest choice holds.
@@ -169,8 +159,7 @@ export function chooseStart(content: Content, surah: number, now: Now): EventDra
     kind: 'start',
     lemmaId: null,
     wordRef: { surah, ayah: first.ayah, word: first.words[0].position },
-    timestamp: now.time,
-    utcOffsetMinutes: now.utcOffsetMinutes,
+    ...stamp(now),
   };
 }
 
@@ -288,8 +277,6 @@ function dueReviews(log: LogEvent[], now: Now): ReviewCard[] {
   );
 }
 
-const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-
 /**
  * The last RECAP_AYAHS ayahs studied before `start`, if the last session (a completed one, or
  * answering reviews) was RECAP_GAP_DAYS or more local days ago.
@@ -300,7 +287,7 @@ function recapFor(
   { next: start, chosenStart }: PathPosition,
   now: Now,
 ): Passage[] {
-  const sessions = log.filter((e) => e.kind === 'completed' || e.kind === 'review');
+  const sessions = log.filter((e) => EVENT_KINDS[e.kind].isSession);
   if (sessions.length === 0) return [];
   const last = Math.max(...sessions.map((e) => eventDay(e, now.utcOffsetMinutes)));
   const gap = localDay(now.time, now.utcOffsetMinutes) - last;
@@ -331,23 +318,16 @@ export function completeSession(plan: SessionPlan, log: LogEvent[], now: Now): E
   const last = plan.newMaterial[plan.newMaterial.length - 1];
   if (!last) return [];
   const known = knownLemmas(log);
-  const { time: timestamp, utcOffsetMinutes } = now;
+  const at = stamp(now);
   return [
     ...plan.newLemmas
       .filter((l) => !known.has(l.lemmaId))
-      .map((l): EventDraft => ({
-        kind: 'learn',
-        lemmaId: l.lemmaId,
-        wordRef: l.wordRef,
-        timestamp,
-        utcOffsetMinutes,
-      })),
+      .map((l): EventDraft => ({ kind: 'learn', lemmaId: l.lemmaId, wordRef: l.wordRef, ...at })),
     {
       kind: 'completed',
       lemmaId: null,
       wordRef: { surah: last.surah, ayah: last.ayah, word: last.toWord },
-      timestamp,
-      utcOffsetMinutes,
+      ...at,
     },
   ];
 }
@@ -358,8 +338,7 @@ export function markKnown(lemmaId: string, wordRef: WordRef, now: Now): EventDra
     kind: 'known',
     lemmaId,
     wordRef,
-    timestamp: now.time,
-    utcOffsetMinutes: now.utcOffsetMinutes,
+    ...stamp(now),
   };
 }
 
@@ -369,7 +348,6 @@ export function undoKnown(lemmaId: string, wordRef: WordRef, now: Now): EventDra
     kind: 'known-undone',
     lemmaId,
     wordRef,
-    timestamp: now.time,
-    utcOffsetMinutes: now.utcOffsetMinutes,
+    ...stamp(now),
   };
 }

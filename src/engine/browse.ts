@@ -1,6 +1,7 @@
 import { lemmaCards } from './cards';
 import type { EventDraft, LogEvent } from './events';
-import { knownLemmas, learnedLemmas, type Now, type PathAyah } from './session';
+import { knownLemmas, learnedLemmas, type PathAyah } from './session';
+import { stamp, type Now } from './time';
 
 /** Any ayah of the Quran with the lemmas of each of its words (on the curated path or not). */
 export type AyahLemmas = PathAyah;
@@ -24,8 +25,7 @@ export function addAyahToReview(ayah: AyahLemmas, log: LogEvent[], now: Now): Ev
         kind: 'added',
         lemmaId,
         wordRef: { surah: ayah.surah, ayah: ayah.ayah, word: word.position },
-        timestamp: now.time,
-        utcOffsetMinutes: now.utcOffsetMinutes,
+        ...stamp(now),
       });
     }
   }
