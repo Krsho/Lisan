@@ -7,6 +7,7 @@ import { RecitationCredit, RecitationError } from '../audio/RecitationControls';
 import { audioSource } from '../audio/source';
 import { useAyahPlayback, type AyahPlayback } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
+import { ayahKey } from '../content/parts';
 import type {
   Ayah,
   AyahPart,
@@ -71,8 +72,6 @@ type Loaded = {
   /** The parts of the path's long ayahs, to show the new material one part a screen. */
   parts: AyahPart[];
 };
-
-const ayahKey = (surah: number, ayah: number) => `${surah}:${ayah}`;
 
 function Session({ content, onDone }: Props & { content: Content }) {
   const repository = useContent();

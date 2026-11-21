@@ -23,6 +23,7 @@ import { useColors, type Colors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { TafsirSection, TranslationSection } from './AyahTranslation';
 import { LinguisticNotes } from './LinguisticNotes';
+import { endsAyah } from './pages';
 import { loadConcepts, WordBreakdown, type Concepts } from './WordBreakdown';
 
 /** What one study screen shows: a whole ayah, or one part of a long ayah. */
@@ -89,7 +90,7 @@ export function StudyView({
   const [highlighted, setHighlighted] = useState<number | null>(null);
   // A later part leaves the ayah's translation, tafsir and ayah-wide notes to another part.
   const laterPart = part !== undefined && part.number !== translationPart;
-  const endsAyah = !part || part.number === part.count;
+  const lastOfAyah = endsAyah(passage);
   const positions = new Set(words.map((w) => w.position));
   const shownNotes = notes.filter((note) =>
     note.word === null ? !laterPart : positions.has(note.word),
@@ -112,7 +113,7 @@ export function StudyView({
       {header}
       <AyahText
         words={words}
-        ayahNumber={endsAyah ? ayah : undefined}
+        ayahNumber={lastOfAyah ? ayah : undefined}
         highlighted={highlighted}
         onPressWord={showWordCards ? showCard : undefined}
       />

@@ -16,7 +16,15 @@ import { useBrowsePositions, useEventLog } from '../user/UserStoreProvider';
 import { AddToReview } from './AddToReview';
 import { notesFor, useLinguisticNotes } from './LinguisticNotes';
 import { JumpToAyah } from './JumpToAyah';
-import { keyOfPage, placeOf, studyPages, type StudyPage } from './pages';
+import {
+  endsAyah,
+  keyOfPage,
+  placeOf,
+  startsAyah,
+  studyPages,
+  translationPageOf,
+  type StudyPage,
+} from './pages';
 import { describePosition, pageIndexOf, type Place } from './position';
 import { StudyPager } from './StudyPager';
 import { StudyView, WordCards } from './StudyView';
@@ -94,22 +102,23 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
   // log or the download changes: not when the learner turns the page.
   const renderPage = useCallback(
     (page: StudyPage, i: number) => {
-      const { ayah, part } = page;
+      const { ayah } = page;
       const ayahLemmas = lemmas.get(ayah);
-      const firstPart = !part || part.number === 1;
-      // The ayah's own controls go after its last part.
-      const endsAyah = !part || part.number === part.count;
+      const translationPage = translationPageOf(pages, i);
       return (
         <StudyView
           passage={page}
           translation={translations.get(ayah) ?? null}
           notes={notesFor(notes, surah, ayah)}
           playback={playback}
-          onOpenTranslationPart={part ? () => setIndex(i - (part.number - 1)) : undefined}
-          header={ayah === 1 && firstPart && basmala ? <Basmala words={basmala} /> : null}
+          onOpenTranslationPart={
+            translationPage !== undefined ? () => setIndex(translationPage) : undefined
+          }
+          header={ayah === 1 && startsAyah(page) && basmala ? <Basmala words={basmala} /> : null}
           footer={
             <>
-              {ayahLemmas && endsAyah ? (
+              {/* The ayah's own controls go after its last part. */}
+              {ayahLemmas && endsAyah(page) ? (
                 <AddToReview ayah={ayahLemmas} events={events} record={record} />
               ) : null}
               <RecitationBar source={audioSource} download={download} error={playback.error} />
@@ -118,7 +127,7 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
         />
       );
     },
-    [lemmas, translations, notes, surah, playback, basmala, events, record, download],
+    [pages, lemmas, translations, notes, surah, playback, basmala, events, record, download],
   );
   const current = pages[index];
   const place = current ? placeOf(current) : null;

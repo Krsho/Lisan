@@ -1,4 +1,5 @@
 import type { Ayah, AyahPart, SurahSummary } from '../content/repository';
+import { ayahKey, partsByAyah } from '../content/parts';
 import type { Passage } from '../engine';
 import { describePosition, type Place } from './position';
 import type { StudyPassage } from './StudyView';
@@ -14,14 +15,9 @@ export const keyOfPage = (page: StudyPage): string => page.key;
  * order. `parts` are the surah's ayah parts (getSurahParts); ayahs without any are shown whole.
  */
 export function studyPages(ayahs: Ayah[], parts: AyahPart[]): StudyPage[] {
-  const partsByAyah = new Map<number, AyahPart[]>();
-  for (const part of parts) {
-    const list = partsByAyah.get(part.ayah);
-    if (list) list.push(part);
-    else partsByAyah.set(part.ayah, [part]);
-  }
+  const byAyah = partsByAyah(parts);
   return ayahs.flatMap(({ surah, ayah, words }): StudyPage[] => {
-    const ayahParts = partsByAyah.get(ayah);
+    const ayahParts = byAyah.get(ayahKey(surah, ayah));
     if (!ayahParts) return [{ key: String(ayah), surah, ayah, words }];
     return ayahParts.map(({ part, count, first, last }) => ({
       key: `${ayah}.${part}`,
@@ -44,10 +40,11 @@ export function sessionPages(
   ayahs: Map<string, Ayah>,
   parts: AyahPart[],
 ): StudyPage[] {
+  const byAyah = partsByAyah(parts);
   return passages.flatMap(({ surah, ayah, fromWord, toWord }) => {
-    const whole = ayahs.get(`${surah}:${ayah}`);
+    const whole = ayahs.get(ayahKey(surah, ayah));
     if (!whole) return [];
-    const ayahParts = parts.filter((p) => p.surah === surah && p.ayah === ayah);
+    const ayahParts = byAyah.get(ayahKey(surah, ayah)) ?? [];
     const pages = studyPages([whole], ayahParts).flatMap((page) => {
       const words = page.words.filter((w) => w.position >= fromWord && w.position <= toWord);
       return words.length > 0 ? [{ ...page, key: `${surah}:${page.key}`, words }] : [];
@@ -95,6 +92,14 @@ export function sessionHeading(
     ),
   };
 }
+
+/** Whether a passage starts its ayah: the whole ayah, or its first part. */
+export const startsAyah = ({ part }: Pick<StudyPassage, 'part'>): boolean =>
+  !part || part.number === 1;
+
+/** Whether a passage ends its ayah: the whole ayah, or its last part. */
+export const endsAyah = ({ part }: Pick<StudyPassage, 'part'>): boolean =>
+  !part || part.number === part.count;
 
 /** The place a page shows, as remembered between visits: its ayah and, for a long ayah, its part. */
 export const placeOf = (page: StudyPage): Place =>
