@@ -2,6 +2,7 @@ import {
   completeSession,
   markKnown,
   planSession,
+  streak,
   undoKnown,
   type EventDraft,
   type PathAyah,
@@ -235,6 +236,18 @@ describe('completing a session', () => {
       false,
     );
     expect(planSession(content, log, normal, at(START + DAY)).completedToday).toBe(false);
+  });
+
+  it('counts a session on the local day where it happened, after travelling', () => {
+    // Completed at 20:00 in New York (UTC-5), then a flight to Tokyo (UTC+9): two hours later it
+    // is noon of the next day there, and that day's session is still to do, as the streak says.
+    const newYorkEvening = Date.UTC(2026, 10, 22, 1);
+    const plan = planSession(content, [], normal, at(newYorkEvening, -300));
+    const log = record([], completeSession(plan, [], at(newYorkEvening, -300)));
+
+    const tokyoNoon = at(newYorkEvening + 2 * 3600_000, 540);
+    expect(planSession(content, log, normal, tokyoNoon).completedToday).toBe(false);
+    expect(streak(log, tokyoNoon)).toBe(1);
   });
 
   it('is not done for a new learner', () => {

@@ -229,7 +229,7 @@ export function planSession(
 
   const today = localDay(now.time, now.utcOffsetMinutes);
   const completedToday = log.some(
-    (e) => e.kind === 'completed' && localDay(e.timestamp, now.utcOffsetMinutes) === today,
+    (e) => e.kind === 'completed' && eventDay(e, now.utcOffsetMinutes) === today,
   );
 
   return {
