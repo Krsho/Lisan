@@ -379,5 +379,6 @@ export function gradeAnswer(
     correct,
     responseTimeMs: Math.max(0, Math.round(responseTimeMs)),
     timestamp: now.time,
+    utcOffsetMinutes: now.utcOffsetMinutes,
   };
 }

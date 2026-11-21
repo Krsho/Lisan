@@ -132,6 +132,47 @@ describe('user store', () => {
     expect(event).toMatchObject({ kind: 'completed', lemmaId: null, wordRef: fatiha });
   });
 
+  it('keeps the UTC offset an event was recorded at', async () => {
+    const store = await openStore();
+
+    await store.record([
+      { kind: 'completed', lemmaId: null, wordRef: fatiha, timestamp: 5, utcOffsetMinutes: -480 },
+    ]);
+
+    const [event] = await store.listEvents();
+    expect(event.utcOffsetMinutes).toBe(-480);
+  });
+
+  it('reads an event stored before offsets were, with no offset', async () => {
+    await migrateUserDb(db, MIGRATIONS.slice(0, 2));
+    await db.run(
+      `INSERT INTO review_events (id, kind, lemma_id, surah, ayah, word, timestamp, device_id)
+       VALUES ('old', 'completed', NULL, 1, 1, 4, 5, 'device-a')`,
+      [],
+    );
+
+    const [event] = await (await openStore()).listEvents();
+
+    expect(event).toEqual({
+      id: 'old',
+      kind: 'completed',
+      lemmaId: null,
+      wordRef: fatiha,
+      timestamp: 5,
+      deviceId: 'device-a',
+    });
+  });
+
+  it('records a chosen start point on the path', async () => {
+    const store = await openStore();
+    const nas = { surah: 114, ayah: 1, word: 1 };
+
+    await store.record([{ kind: 'start', lemmaId: null, wordRef: nas, timestamp: 3 }]);
+
+    const [event] = await store.listEvents();
+    expect(event).toMatchObject({ kind: 'start', lemmaId: null, wordRef: nas });
+  });
+
   it('never overwrites an event: one added again with the same id is skipped', async () => {
     const store = await openStore();
     const event: ReviewEvent = {

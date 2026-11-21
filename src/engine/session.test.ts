@@ -213,12 +213,14 @@ describe('completing a session', () => {
       lemmaId: 'rahim',
       wordRef: { surah: 1, ayah: 1, word: 4 },
       timestamp: START + 60_000,
+      utcOffsetMinutes: 0,
     });
     expect(drafts).toContainEqual({
       kind: 'completed',
       lemmaId: null,
       wordRef: { surah: 1, ayah: 4, word: 3 },
       timestamp: START + 60_000,
+      utcOffsetMinutes: 0,
     });
   });
 

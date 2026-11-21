@@ -14,9 +14,18 @@ type EventRow = {
   response_time_ms: number | null;
   timestamp: number;
   device_id: string;
+  utc_offset_minutes: number | null;
 };
 
-const KINDS = new Set<string>(['learn', 'known', 'known-undone', 'added', 'completed', 'review']);
+const KINDS = new Set<string>([
+  'learn',
+  'known',
+  'known-undone',
+  'added',
+  'completed',
+  'start',
+  'review',
+]);
 const RATINGS = new Set([1, 2, 3, 4]);
 
 function toEvent(row: EventRow): ReviewEvent | null {
@@ -29,6 +38,7 @@ function toEvent(row: EventRow): ReviewEvent | null {
     wordRef: { surah: row.surah, ayah: row.ayah, word: row.word },
     timestamp: row.timestamp,
     deviceId: row.device_id,
+    ...(row.utc_offset_minutes === null ? {} : { utcOffsetMinutes: row.utc_offset_minutes }),
   };
   if (row.kind === 'review') {
     if (row.rating === null || !RATINGS.has(row.rating) || row.correct === null) return null;
@@ -44,7 +54,7 @@ function toEvent(row: EventRow): ReviewEvent | null {
 }
 
 function toRow(event: ReviewEvent): SqlValue[] {
-  const { id, kind, lemmaId, wordRef, timestamp, deviceId } = event;
+  const { id, kind, lemmaId, wordRef, timestamp, deviceId, utcOffsetMinutes } = event;
   const graded = event.kind === 'review' ? event : null;
   return [
     id,
@@ -58,13 +68,15 @@ function toRow(event: ReviewEvent): SqlValue[] {
     graded?.responseTimeMs ?? null,
     timestamp,
     deviceId,
+    utcOffsetMinutes ?? null,
   ];
 }
 
 const INSERT_EVENT = `
   INSERT OR IGNORE INTO review_events
-    (id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms, timestamp, device_id)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    (id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms, timestamp, device_id,
+     utc_offset_minutes)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 /**
  * The learner's data in the user database: the device id, the append-only event log and
@@ -115,7 +127,7 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     async listEvents(): Promise<ReviewEvent[]> {
       const rows = await db.all<EventRow>(
         `SELECT id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms,
-                timestamp, device_id
+                timestamp, device_id, utc_offset_minutes
            FROM review_events ORDER BY timestamp, id`,
         [],
       );

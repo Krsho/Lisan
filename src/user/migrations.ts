@@ -35,6 +35,11 @@ export const MIGRATIONS: readonly string[] = [
     updated_at INTEGER NOT NULL
   ) STRICT;
   `,
+  // 3: the UTC offset each event was recorded at, so days (streaks) stay right after travelling.
+  // NULL on events recorded before it; the engine places those by the current offset.
+  `
+  ALTER TABLE review_events ADD COLUMN utc_offset_minutes INTEGER;
+  `,
 ];
 
 /** Brings the database up to the latest schema. Each step commits on its own, with its version. */

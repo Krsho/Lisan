@@ -69,9 +69,17 @@ export type SessionPlan = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The learner's local day number, counted from the epoch. */
-const localDay = (time: number, utcOffsetMinutes: number) =>
+/** The local day number, counted from the epoch, of a moment at the given UTC offset. */
+export const localDay = (time: number, utcOffsetMinutes: number) =>
   Math.floor((time + utcOffsetMinutes * 60_000) / DAY_MS);
+
+/**
+ * The local day an event happened on, where it happened: by the UTC offset it was recorded with,
+ * so days stay right after travelling. Events recorded before offsets were stored fall back to
+ * `fallbackOffset` (the learner's current one).
+ */
+export const eventDay = (event: ReviewEvent, fallbackOffset: number) =>
+  localDay(event.timestamp, event.utcOffsetMinutes ?? fallbackOffset);
 
 /** The lemmas the learner marked "I know this" and has not taken back. */
 export function knownLemmas(log: ReviewEvent[]): Set<string> {
@@ -90,32 +98,66 @@ export function learnedLemmas(log: ReviewEvent[]): Set<string> {
 
 const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
 
-/** Where the next session starts: the word after the furthest one any completed session reached. */
-function pathStart(path: PathAyah[], log: ReviewEvent[]): { ayah: number; word: number } {
-  const index = new Map<string, { ayah: number; word: number }>();
+/** A place on the path: the index of an ayah in it, and of a word in that ayah (both from 0). */
+export type PathPoint = { ayah: number; word: number };
+
+const isAfter = (a: PathPoint, b: PathPoint) =>
+  a.ayah > b.ayah || (a.ayah === b.ayah && a.word > b.word);
+
+export type PathPosition = {
+  /**
+   * Where the next session starts: the word after the furthest one any completed session reached,
+   * or the chosen start point if that is further. `ayah` is path.length once the path is finished.
+   */
+  next: PathPoint;
+  /** The ayah the learner chose to start at (0 if they never chose): the ones before are skipped. */
+  chosenStart: number;
+};
+
+/** How far along the path the learner is, from the completed sessions and a chosen start point. */
+export function pathPosition(path: PathAyah[], log: ReviewEvent[]): PathPosition {
+  const index = new Map<string, PathPoint>();
   path.forEach((a, ayah) =>
     a.words.forEach((w, word) =>
       index.set(refKey({ surah: a.surah, ayah: a.ayah, word: w.position }), { ayah, word }),
     ),
   );
-  let furthest: { ayah: number; word: number } | null = null;
-  for (const event of log) {
-    if (event.kind !== 'completed') continue;
+  let furthest: PathPoint | null = null;
+  let chosen: PathPoint | null = null;
+  for (const event of chronological(log)) {
     // A word no longer on the path (the content changed) says nothing about progress.
     const at = index.get(refKey(event.wordRef));
-    if (
-      at &&
-      (!furthest ||
-        at.ayah > furthest.ayah ||
-        (at.ayah === furthest.ayah && at.word > furthest.word))
-    )
-      furthest = at;
+    if (!at) continue;
+    if (event.kind === 'completed' && (!furthest || isAfter(at, furthest))) furthest = at;
+    // The latest choice holds.
+    else if (event.kind === 'start') chosen = at;
   }
-  if (!furthest) return { ayah: 0, word: 0 };
-  const isLastWord = furthest.word === path[furthest.ayah].words.length - 1;
-  return isLastWord
-    ? { ayah: furthest.ayah + 1, word: 0 }
-    : { ...furthest, word: furthest.word + 1 };
+  let next: PathPoint = { ayah: 0, word: 0 };
+  if (furthest) {
+    const isLastWord = furthest.word === path[furthest.ayah].words.length - 1;
+    next = isLastWord
+      ? { ayah: furthest.ayah + 1, word: 0 }
+      : { ...furthest, word: furthest.word + 1 };
+  }
+  // A start point behind what is studied already is not a reason to study it again.
+  if (chosen && isAfter(chosen, next)) next = chosen;
+  return { next, chosenStart: chosen?.ayah ?? 0 };
+}
+
+/**
+ * "Start at this surah": the learner skips the path up to its first ayah on the path (the
+ * onboarding's optional later start point). Null if the surah is not on the path.
+ */
+export function chooseStart(content: Content, surah: number, now: Now): EventDraft | null {
+  const first = content.path.find((a) => a.surah === surah);
+  if (!first || first.words.length === 0) return null;
+  return {
+    kind: 'start',
+    lemmaId: null,
+    wordRef: { surah, ayah: first.ayah, word: first.words[0].position },
+    timestamp: now.time,
+    utcOffsetMinutes: now.utcOffsetMinutes,
+  };
 }
 
 /**
@@ -135,7 +177,8 @@ export function planSession(
   const newMaterial: Passage[] = [];
   const newLemmas: NewLemma[] = [];
 
-  const start = pathStart(path, log);
+  const position = pathPosition(path, log);
+  const start = position.next;
   for (let i = start.ayah; i < path.length; i++) {
     const { surah, ayah, words } = path[i];
     const rest = words.slice(i === start.ayah ? start.word : 0);
@@ -191,7 +234,7 @@ export function planSession(
 
   return {
     reviews: dueReviews(log, now),
-    recap: recapFor(path, log, start, now),
+    recap: recapFor(path, log, position, now),
     newMaterial,
     newLemmas,
     completedToday,
@@ -225,18 +268,19 @@ function dueReviews(log: ReviewEvent[], now: Now): ReviewCard[] {
 function recapFor(
   path: PathAyah[],
   log: ReviewEvent[],
-  start: { ayah: number; word: number },
+  { next: start, chosenStart }: PathPosition,
   now: Now,
 ): Passage[] {
   const sessions = log.filter((e) => e.kind === 'completed' || e.kind === 'review');
   if (sessions.length === 0) return [];
-  const last = Math.max(...sessions.map((e) => e.timestamp));
-  const gap = localDay(now.time, now.utcOffsetMinutes) - localDay(last, now.utcOffsetMinutes);
+  const last = Math.max(...sessions.map((e) => eventDay(e, now.utcOffsetMinutes)));
+  const gap = localDay(now.time, now.utcOffsetMinutes) - last;
   if (gap < RECAP_GAP_DAYS) return [];
 
   const studied: Passage[] = [];
   const through = start.word > 0 ? start.ayah : start.ayah - 1;
-  for (let i = Math.max(0, through - RECAP_AYAHS + 1); i <= through; i++) {
+  // Ayahs skipped by choosing a later start point were never studied, so are not recapped.
+  for (let i = Math.max(chosenStart, through - RECAP_AYAHS + 1); i <= through; i++) {
     const { surah, ayah, words } = path[i];
     const upTo = i === start.ayah ? start.word : words.length;
     studied.push({
@@ -258,7 +302,7 @@ export function completeSession(plan: SessionPlan, log: ReviewEvent[], now: Now)
   const last = plan.newMaterial[plan.newMaterial.length - 1];
   if (!last) return [];
   const known = knownLemmas(log);
-  const timestamp = now.time;
+  const { time: timestamp, utcOffsetMinutes } = now;
   return [
     ...plan.newLemmas
       .filter((l) => !known.has(l.lemmaId))
@@ -267,22 +311,36 @@ export function completeSession(plan: SessionPlan, log: ReviewEvent[], now: Now)
         lemmaId: l.lemmaId,
         wordRef: l.wordRef,
         timestamp,
+        utcOffsetMinutes,
       })),
     {
       kind: 'completed',
       lemmaId: null,
       wordRef: { surah: last.surah, ayah: last.ayah, word: last.toWord },
       timestamp,
+      utcOffsetMinutes,
     },
   ];
 }
 
 /** "I know this" on a lemma, seen in the word at `wordRef`. */
 export function markKnown(lemmaId: string, wordRef: WordRef, now: Now): EventDraft {
-  return { kind: 'known', lemmaId, wordRef, timestamp: now.time };
+  return {
+    kind: 'known',
+    lemmaId,
+    wordRef,
+    timestamp: now.time,
+    utcOffsetMinutes: now.utcOffsetMinutes,
+  };
 }
 
 /** Takes back "I know this" on a lemma. */
 export function undoKnown(lemmaId: string, wordRef: WordRef, now: Now): EventDraft {
-  return { kind: 'known-undone', lemmaId, wordRef, timestamp: now.time };
+  return {
+    kind: 'known-undone',
+    lemmaId,
+    wordRef,
+    timestamp: now.time,
+    utcOffsetMinutes: now.utcOffsetMinutes,
+  };
 }

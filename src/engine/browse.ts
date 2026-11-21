@@ -25,6 +25,7 @@ export function addAyahToReview(ayah: AyahLemmas, log: ReviewEvent[], now: Now):
         lemmaId,
         wordRef: { surah: ayah.surah, ayah: ayah.ayah, word: word.position },
         timestamp: now.time,
+        utcOffsetMinutes: now.utcOffsetMinutes,
       });
     }
   }
