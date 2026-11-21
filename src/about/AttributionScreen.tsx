@@ -53,6 +53,7 @@ export function AttributionScreen() {
   const content = useContent();
   const colors = useColors();
   const [editions, setEditions] = useState<Edition[]>([]);
+  const [contentVersion, setContentVersion] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +62,12 @@ export function AttributionScreen() {
         if (!cancelled) setEditions(result);
       },
       (error: unknown) => console.error('Failed to load editions', error),
+    );
+    content.getContentVersion().then(
+      (version) => {
+        if (!cancelled) setContentVersion(version);
+      },
+      (error: unknown) => console.error('Failed to load the content version', error),
     );
     return () => {
       cancelled = true;
@@ -77,6 +84,9 @@ export function AttributionScreen() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={[styles.title, { color: colors.text }]}>Sources and credits</Text>
+      {contentVersion !== null ? (
+        <Text style={[styles.role, { color: colors.muted }]}>Content version {contentVersion}</Text>
+      ) : null}
       {[...CREDITS_BEFORE_EDITIONS, ...quranEnc, ...CREDITS_AFTER_EDITIONS].map((credit) => (
         <CreditRow key={credit.name} credit={credit} colors={colors} />
       ))}

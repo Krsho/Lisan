@@ -209,6 +209,16 @@ export function createContentRepository(db: SqlRunner) {
       return path;
     },
 
+    /** The content database's version, for the about screen and mistake reports. */
+    async getContentVersion(): Promise<number> {
+      const [row] = await db.all<{ value: string }>(
+        `SELECT value FROM meta WHERE key = 'content_version'`,
+        [],
+      );
+      if (!row) throw new Error('Content database has no content_version');
+      return Number(row.value);
+    },
+
     async getEditions(): Promise<Edition[]> {
       return db.all<Edition>(
         `SELECT kind, language, key, title, url, version, fetched_at AS fetchedAt

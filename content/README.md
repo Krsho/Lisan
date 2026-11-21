@@ -9,6 +9,37 @@ npm run content:build   # writes assets/content/content.db
 
 Bump `CONTENT_VERSION` in `src/content/version.ts` whenever the generated database changes, so installed apps pick up the new copy.
 
+## Content updates
+
+Installed apps can get a newer content database (data fixes, a new QuranEnc version) without a store release. The app reads a manifest from `CONTENT_MANIFEST_URL` (`src/content/update/config.ts`), the `content-manifest.json` asset of the fixed `content-latest` GitHub release:
+
+```json
+{
+  "version": 5,
+  "schema": 1,
+  "url": "https://github.com/Krsho/Lisan/releases/download/content-v5/content-v5.db",
+  "sha256": "<lowercase hex sha256 of the file>",
+  "bytes": 13901824
+}
+```
+
+- `version` is the database's `meta.content_version` (`CONTENT_VERSION`). The app downloads it only if it is newer than the database it has open.
+- `schema` is `CONTENT_SCHEMA` (`src/content/version.ts`): the table layout. Bump it when tables or columns change in a way older app builds cannot read. An app only downloads a database of its own schema, so a new schema reaches users through an app update.
+- At most once a day, in the background, the app downloads the file to `content-vN.db.part`, checks its sha256, opens it (`PRAGMA integrity_check`, `content_version`), renames it to `content-vN.db`, and only then records it as active in `content-update.json` (app documents; never the user database). The new database opens on the next app start. If any step fails, the old database stays in use. A newer bundled database (from an app update) wins over an older download.
+- Learner progress lives in the user database and refers to content by stable references (`surah:ayah:word`, lemma text, glossary term keys), so it survives an update. Keep these stable between content versions. Do not use `terms.id` outside the content database: it is numbered by the order of `content/glossary.json`.
+
+### Releasing a content update (human step)
+
+Before the first public release, check the licenses in [Sources](#sources): posting the database is redistribution, the same as shipping it in the app (KFGQPC and Tarteel permission; no Quran Foundation content in it).
+
+1. Bump `CONTENT_VERSION`, run `npm run content:build`, run `npm run check`, and merge the change (the bundled database and the release must have the same content for the same version).
+2. `npm run content:release`. It checks the database and writes `dist/content-release/content-vN.db` and `content-manifest.json`, then prints the commands for the next two steps.
+3. Upload the database to its own release: `gh release create content-vN dist/content-release/content-vN.db --title "Content vN" --notes "<what changed>"`.
+4. Replace the manifest on the `content-latest` release: `gh release upload content-latest dist/content-release/content-manifest.json --clobber`. The first time, create that release instead: `gh release create content-latest dist/content-release/content-manifest.json --title "Latest content" --notes "Manifest read by the app" --latest=false`.
+5. Check: `curl -L https://github.com/Krsho/Lisan/releases/download/content-latest/content-manifest.json` shows the new version, and an installed app shows it under "About and sources" after two starts (one to download, one to open it).
+
+Upload the database before the manifest, so the manifest never points to a missing file. To withdraw a bad release, upload the previous manifest again; apps that already switched keep the bad version until a higher one is published, so fix forward with a new version.
+
 ## Sources
 
 | File in `content/sources/`                       | Source                                                                                                                                                                                                                                                                                                                                                                         | License / terms                                                                                                                                                                                              |
