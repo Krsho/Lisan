@@ -6,7 +6,7 @@ import { SurahScreen } from '../../reading/SurahScreen';
 import { SettingsHeaderButton } from '../../settings/SettingsHeaderButton';
 import { useColors } from '../../theme/colors';
 
-/** `/surah/2` reads Al-Baqarah; `/surah/2?ayah=255` opens it at ayah 255. */
+/** `/surah/2` studies Al-Baqarah ayah by ayah; `/surah/2?ayah=255` opens it at ayah 255. */
 export default function SurahRoute() {
   const params = useLocalSearchParams<{ surah: string; ayah?: string }>();
   const colors = useColors();
@@ -35,12 +35,8 @@ export default function SurahRoute() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: `${summary.surah}. ${summary.nameEnglish}`,
-          headerRight: () => <SettingsHeaderButton />,
-        }}
-      />
+      {/* SurahScreen titles the screen with the position, e.g. "Al-Baqarah · 5 / 286". */}
+      <Stack.Screen options={{ headerRight: () => <SettingsHeaderButton /> }} />
       <SurahScreen summary={summary} initialAyah={ayah} />
     </>
   );
