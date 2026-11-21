@@ -8,6 +8,12 @@ type EventBase = {
   timestamp: number;
   /** The device that recorded it. */
   deviceId: string;
+  /**
+   * The device's UTC offset when it happened, in minutes, which says which local day it was on:
+   * a session in Tokyo stays on Tokyo's date after flying to New York. Absent on events recorded
+   * before the offset was stored; they fall back to the learner's current offset.
+   */
+  utcOffsetMinutes?: number;
 };
 
 /** A lemma met as new material in a completed session, in the word form where it appeared. */
@@ -31,6 +37,12 @@ export type AddedEvent = EventBase & { kind: 'added'; lemmaId: string; wordRef: 
 
 /** A session was completed: the path is studied up to and including this word. */
 export type CompletedEvent = EventBase & { kind: 'completed'; lemmaId: null; wordRef: WordRef };
+
+/**
+ * The learner chose to start the path at this word (the first of a surah's ayahs on it) instead of
+ * at the beginning: the path before it is skipped, not studied.
+ */
+export type StartEvent = EventBase & { kind: 'start'; lemmaId: null; wordRef: WordRef };
 
 /** FSRS's four ratings: 1 again, 2 hard, 3 good, 4 easy. */
 export type Rating = 1 | 2 | 3 | 4;
@@ -56,7 +68,13 @@ export type GradedEvent = EventBase & {
  * stored, so logs from several devices can be merged by union.
  */
 export type ReviewEvent =
-  LearnEvent | KnownEvent | KnownUndoneEvent | AddedEvent | CompletedEvent | GradedEvent;
+  | LearnEvent
+  | KnownEvent
+  | KnownUndoneEvent
+  | AddedEvent
+  | CompletedEvent
+  | StartEvent
+  | GradedEvent;
 
 export type EventKind = ReviewEvent['kind'];
 

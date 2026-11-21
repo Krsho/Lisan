@@ -1,10 +1,12 @@
 /**
- * Reading settings: what they are, their defaults, and how they are read back from the user
+ * The learner's settings (reading, and the learning pace): what they are, their defaults, and how they are read back from the user
  * database. Pure, so the rules are tested without React or SQLite.
  *
  * Each setting is stored as its own row (key, JSON value), so a device that doesn't know a key
  * (an older app version, after sync) keeps it untouched and a bad value only resets that setting.
  */
+
+import { NEW_LEMMA_BUDGET, type Pace } from '../engine';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type ColorSchemeName = 'light' | 'dark';
@@ -18,6 +20,10 @@ export type ReadingSettings = {
   showTranslation: boolean;
   /** Whether an ayah's tafsir is open when it is first shown. */
   showTafsir: boolean;
+  /** How many new words a daily session introduces (the engine's new-lemma budget). */
+  pace: Pace;
+  /** Whether the learner has been through onboarding (shown on first launch). */
+  onboarded: boolean;
   // Reserved: `hideTashkeel` (the hide-tashkeel challenge mode) is a later feature. Don't reuse
   // the key for anything else.
 };
@@ -29,6 +35,8 @@ export const DEFAULT_READING_SETTINGS: ReadingSettings = {
   arabicFontScale: 1,
   showTranslation: true,
   showTafsir: false,
+  pace: 'normal',
+  onboarded: false,
 };
 
 /** The sizes the settings screen steps through, smallest first. */
@@ -38,6 +46,7 @@ const MIN_SCALE = ARABIC_FONT_SCALES[0];
 const MAX_SCALE = ARABIC_FONT_SCALES[ARABIC_FONT_SCALES.length - 1];
 
 const THEMES = new Set<unknown>(['system', 'light', 'dark']);
+const PACES = new Set<unknown>(Object.keys(NEW_LEMMA_BUDGET));
 
 /** Returns the value if it is valid for the setting, else undefined. */
 function validate(key: SettingKey, value: unknown): ReadingSettings[SettingKey] | undefined {
@@ -50,7 +59,10 @@ function validate(key: SettingKey, value: unknown): ReadingSettings[SettingKey] 
         : undefined;
     case 'showTranslation':
     case 'showTafsir':
+    case 'onboarded':
       return typeof value === 'boolean' ? value : undefined;
+    case 'pace':
+      return PACES.has(value) ? (value as Pace) : undefined;
   }
 }
 

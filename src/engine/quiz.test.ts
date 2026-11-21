@@ -278,6 +278,7 @@ describe('grading quiz answers', () => {
       correct: true,
       responseTimeMs: 2500,
       timestamp: answeredAt.time,
+      utcOffsetMinutes: 0,
     });
   });
 

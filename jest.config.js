@@ -8,6 +8,7 @@ module.exports = {
       displayName: 'app',
       modulePathIgnorePatterns: ['<rootDir>/.claude/'],
       preset: 'jest-expo',
+      setupFilesAfterEnv: ['<rootDir>/src/testing/loadReactNative.ts'],
       testRegex: '/src/.*\\.test\\.tsx?$',
     },
     {

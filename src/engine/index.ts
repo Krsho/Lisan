@@ -5,3 +5,4 @@ export * from './session';
 export * from './cards';
 export * from './quiz';
 export * from './browse';
+export * from './progress';

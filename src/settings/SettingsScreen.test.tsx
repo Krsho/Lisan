@@ -29,3 +29,21 @@ it('changes the theme, font size and default visibility', async () => {
     [{ showTafsir: true }],
   ]);
 });
+
+it('changes the daily pace', async () => {
+  const update = jest.fn();
+  await render(
+    <SettingsProvider value={{ settings: DEFAULT_READING_SETTINGS, update }}>
+      <SettingsScreen />
+    </SettingsProvider>,
+  );
+
+  expect(screen.getByRole('radio', { name: 'Normal pace' }).props.accessibilityState).toMatchObject(
+    { selected: true },
+  );
+  expect(screen.getByText('15 new words a session, from the next one.')).toBeTruthy();
+
+  await fireEvent.press(screen.getByRole('radio', { name: 'Intense pace' }));
+
+  expect(update).toHaveBeenCalledWith({ pace: 'intense' });
+});
