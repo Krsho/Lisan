@@ -1,4 +1,6 @@
 /** @type {import('jest').Config} */
+// testRegex rather than testMatch: testMatch globs skip paths through dot-folders,
+// such as agent worktrees under .claude/worktrees/.
 module.exports = {
   modulePathIgnorePatterns: ['<rootDir>/.claude/'],
   projects: [
@@ -6,15 +8,15 @@ module.exports = {
       displayName: 'app',
       modulePathIgnorePatterns: ['<rootDir>/.claude/'],
       preset: 'jest-expo',
-      testMatch: ['<rootDir>/src/**/*.test.ts?(x)'],
+      testRegex: '/src/.*\\.test\\.tsx?$',
     },
     {
       displayName: 'tools',
       modulePathIgnorePatterns: ['<rootDir>/.claude/'],
       testEnvironment: 'node',
-      testMatch: ['<rootDir>/tools/**/*.test.ts'],
+      testRegex: '/tools/.*\\.test\\.ts$',
       transform: {
-        '\.ts$': ['babel-jest', { presets: ['babel-preset-expo'] }],
+        '\\.ts$': ['babel-jest', { presets: ['babel-preset-expo'] }],
       },
     },
   ],
