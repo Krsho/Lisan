@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
+import { AttributionScreen } from '../about/AttributionScreen';
 import { useContent } from '../content/ContentProvider';
-import type { Ayah, WordRef } from '../content/repository';
+import type { Ayah, AyahTranslation as AyahTranslationData, WordRef } from '../content/repository';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY } from '../theme/quranFont';
+import { AyahTranslation } from './AyahTranslation';
 import { WordDetailSheet } from './WordDetailSheet';
 
 const toArabicDigits = (n: number) =>
@@ -14,14 +24,18 @@ export function SurahScreen({ surah }: { surah: number }) {
   const content = useContent();
   const colors = useColors();
   const [ayahs, setAyahs] = useState<Ayah[] | null>(null);
+  const [translations, setTranslations] = useState<Map<number, AyahTranslationData>>(new Map());
   const [failed, setFailed] = useState(false);
   const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    content.getSurah(surah, 'en').then(
-      (result) => {
-        if (!cancelled) setAyahs(result);
+    Promise.all([content.getSurah(surah, 'en'), content.getTranslations(surah, 'en')]).then(
+      ([words, texts]) => {
+        if (cancelled) return;
+        setAyahs(words);
+        setTranslations(new Map(texts.map((t) => [t.ayah, t])));
       },
       (error: unknown) => {
         console.error('Failed to load surah', surah, error);
@@ -51,31 +65,62 @@ export function SurahScreen({ surah }: { surah: number }) {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
       >
-        {ayahs.map((ayah) => (
-          <View key={ayah.ayah} style={[styles.ayah, { borderColor: colors.border }]}>
-            <View style={styles.words}>
-              {ayah.words.map((word) => (
-                <Pressable
-                  key={word.position}
-                  style={styles.word}
-                  accessibilityRole="button"
-                  accessibilityHint="Shows the word's grammar"
-                  onPress={() => setSelectedWord({ surah, ayah: ayah.ayah, word: word.position })}
-                >
-                  <Text style={[styles.arabic, { color: colors.text }]}>{word.text}</Text>
-                  <Text style={[styles.gloss, { color: colors.muted }]}>{word.gloss ?? '—'}</Text>
-                </Pressable>
-              ))}
-              <View style={styles.word}>
-                <Text style={[styles.arabic, { color: colors.accent }]}>
-                  {`۝${toArabicDigits(ayah.ayah)}`}
-                </Text>
+        {/* Temporary entry point until the app has navigation. */}
+        <Pressable
+          style={styles.about}
+          accessibilityRole="button"
+          onPress={() => setAboutOpen(true)}
+          hitSlop={8}
+        >
+          <Text style={{ color: colors.accent }}>About and sources</Text>
+        </Pressable>
+        {ayahs.map((ayah) => {
+          const translation = translations.get(ayah.ayah);
+          return (
+            <View key={ayah.ayah} style={[styles.ayah, { borderColor: colors.border }]}>
+              <View style={styles.words}>
+                {ayah.words.map((word) => (
+                  <Pressable
+                    key={word.position}
+                    style={styles.word}
+                    accessibilityRole="button"
+                    accessibilityHint="Shows the word's grammar"
+                    onPress={() => setSelectedWord({ surah, ayah: ayah.ayah, word: word.position })}
+                  >
+                    <Text style={[styles.arabic, { color: colors.text }]}>{word.text}</Text>
+                    <Text style={[styles.gloss, { color: colors.muted }]}>{word.gloss ?? '—'}</Text>
+                  </Pressable>
+                ))}
+                <View style={styles.word}>
+                  <Text style={[styles.arabic, { color: colors.accent }]}>
+                    {`۝${toArabicDigits(ayah.ayah)}`}
+                  </Text>
+                </View>
               </View>
+              {translation ? <AyahTranslation data={translation} /> : null}
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
       <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
+      <Modal
+        visible={aboutOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAboutOpen(false)}
+      >
+        <View style={[styles.aboutSheet, { backgroundColor: colors.background }]}>
+          <Pressable
+            style={styles.close}
+            accessibilityRole="button"
+            onPress={() => setAboutOpen(false)}
+            hitSlop={8}
+          >
+            <Text style={{ color: colors.accent }}>Close</Text>
+          </Pressable>
+          <AttributionScreen />
+        </View>
+      </Modal>
     </>
   );
 }
@@ -83,6 +128,9 @@ export function SurahScreen({ surah }: { surah: number }) {
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16, paddingTop: 64 },
+  about: { alignSelf: 'flex-end' },
+  aboutSheet: { flex: 1, paddingTop: 16 },
+  close: { alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 8 },
   ayah: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   // Arabic reads right to left, so words flow from the right edge.
   words: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 12, columnGap: 14 },
