@@ -180,6 +180,8 @@ type Target = {
   segment: QuizSegment;
   partOfSpeech: string | null;
   frequency: number;
+  /** A word that is the lemma alone, if there is one. */
+  sample: LemmaEntry['sample'];
 };
 
 function meaningItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): QuizItem | null {
@@ -202,13 +204,21 @@ function meaningItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): Qui
 }
 
 function arabicItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): QuizItem | null {
-  const gloss = t.word.gloss;
-  if (!gloss) return null;
+  // Wrong options are words that are their lemma alone. A word that carries other lemmas too (a
+  // prefix such as the definite article) would stand out among them, so it is asked as its
+  // lemma's own word, with that word's meaning.
+  const alone = t.word.segments.every((s) => s.lemma === null || s.lemma === t.lemmaId);
+  const shown = alone ? t.word : t.sample;
+  const gloss = shown?.gloss;
+  if (!shown || !gloss) return null;
   // A word whose meaning reads the same would also be right, so it is no wrong option.
-  const candidates = similarLemmas(lemmas, t, exclude).filter((e) => !same(e.sample.gloss, gloss));
+  const meanings = [gloss, t.word.gloss].filter((g): g is string => g !== null);
+  const candidates = similarLemmas(lemmas, t, exclude).filter(
+    (e) => !meanings.some((g) => same(e.sample.gloss, g)),
+  );
   const wrong = pick(
     candidates.map((e) => e.sample.bare),
-    [t.word.bare],
+    [shown.bare, t.word.bare],
     OPTIONS - 1,
   );
   if (wrong.length === 0) return null;
@@ -218,8 +228,8 @@ function arabicItem(t: Target, lemmas: LemmaEntry[], exclude: Set<string>): Quiz
     wordRef: t.word.ref,
     word: t.word.bare,
     meaning: gloss,
-    answer: t.word.bare,
-    options: shuffle([t.word.bare, ...wrong], `${t.lemmaId}:arabic`),
+    answer: shown.bare,
+    options: shuffle([shown.bare, ...wrong], `${t.lemmaId}:arabic`),
   };
 }
 
@@ -322,6 +332,7 @@ function questionsFor(
       segment,
       partOfSpeech: partOfSpeechOf(segment) ?? entry?.partOfSpeech ?? null,
       frequency: entry?.frequency ?? 1,
+      sample: entry?.sample ?? null,
     };
     // The word's other lemmas would make a confusing wrong option (its meaning includes theirs).
     const exclude = new Set(word.segments.flatMap((s) => (s.lemma ? [s.lemma] : [])));

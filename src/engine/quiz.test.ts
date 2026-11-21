@@ -218,6 +218,15 @@ describe("the quiz on today's new words", () => {
     expect(wrongOptions(item).sort()).toEqual(['خَلَقَ', 'يَعْلَمُ', 'كَتَبَ'].sort());
   });
 
+  it('offers the lemma on its own for a word with a prefix, like the wrong words', () => {
+    // ٱلرَّحِيمِ carries the definite article, which no wrong word (a lemma alone) would have.
+    const items = planQuiz(planOf(['اسْم', 1, 1], ['رَحِيم', 1, 4]), [], content);
+    const [item] = ofType(items, 'arabic');
+
+    expect(item).toMatchObject({ lemmaId: 'رَحِيم', meaning: 'Most Merciful', answer: 'رَحِيمًا' });
+    expect(item.options).not.toContain('ٱلرَّحِيمِ');
+  });
+
   it('never offers a wrong word that means the same as the answer', () => {
     const items = planQuiz(planOf(['اسْم', 1, 1], ['رَحِيم', 1, 4]), [], content);
     const [item] = ofType(items, 'arabic');
