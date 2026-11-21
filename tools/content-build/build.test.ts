@@ -233,7 +233,9 @@ describe('content build', () => {
 
     // قُلۡ أَعُوذُ بِرَبِّ ٱلنَّاسِ
     expect(nas1.words.map((w) => w.position)).toEqual([1, 2, 3, 4]);
-    expect(nas1.words[2].lemmas.map((l) => l.normalize('NFC'))).toEqual(['ب', 'رَبّ'].map((l) => l.normalize('NFC')));
+    expect(nas1.words[2].lemmas.map((l) => l.normalize('NFC'))).toEqual(
+      ['ب', 'رَبّ'].map((l) => l.normalize('NFC')),
+    );
   });
 
   it('gives the Basmala header the words of 1:1, linked to their details there', async () => {

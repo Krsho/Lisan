@@ -1,0 +1,48 @@
+/** A word's place in the Quran: surah, ayah and word position (from 1). */
+export type WordRef = { surah: number; ayah: number; word: number };
+
+type EventBase = {
+  /** Unique id (a UUID), so that merging logs from several devices can drop duplicates. */
+  id: string;
+  /** When it happened, in epoch milliseconds. */
+  timestamp: number;
+  /** The device that recorded it. */
+  deviceId: string;
+};
+
+/** A lemma met as new material in a completed session, in the word form where it appeared. */
+export type LearnEvent = EventBase & { kind: 'learn'; lemmaId: string; wordRef: WordRef };
+
+/** "I know this": the lemma is never new material (and, later, never reviewed). */
+export type KnownEvent = EventBase & { kind: 'known'; lemmaId: string; wordRef: WordRef };
+
+/** Takes back an earlier "I know this" for the lemma. */
+export type KnownUndoneEvent = EventBase & {
+  kind: 'known-undone';
+  lemmaId: string;
+  wordRef: WordRef;
+};
+
+/** A session was completed: the path is studied up to and including this word. */
+export type CompletedEvent = EventBase & { kind: 'completed'; lemmaId: null; wordRef: WordRef };
+
+/**
+ * One entry of the learner's append-only log. Everything about progress (path position, learned
+ * and known lemmas, and later card state and streaks) is derived from the log; nothing else is
+ * stored, so logs from several devices can be merged by union.
+ */
+export type ReviewEvent = LearnEvent | KnownEvent | KnownUndoneEvent | CompletedEvent;
+
+export type EventKind = ReviewEvent['kind'];
+
+type Draft<E> = E extends ReviewEvent ? Omit<E, 'id' | 'deviceId'> : never;
+
+/** An event the engine decided on, before the user store gives it an id and the device id. */
+export type EventDraft = Draft<ReviewEvent>;
+
+/** Events in the order they happened; ties (same millisecond) broken by id, so on every device alike. */
+export function chronological<E extends { timestamp: number; id: string }>(events: E[]): E[] {
+  return [...events].sort(
+    (a, b) => a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
