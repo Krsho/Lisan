@@ -1,22 +1,62 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { createContentRepository } from '../../src/content/repository';
 import { buildContentDatabase } from './build';
 import { parseGlossary } from './glossary';
 import { openSqlRunner } from './nodeSqlRunner';
 import { parseQulWordByWord } from './qul';
+import { parseQuranEncResult, readQuranEncSqlite } from './quranenc';
 
 const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', name), 'utf8');
 
 const nfc = <T extends { text: string }>(items: T[]) =>
   items.map((item) => ({ ...item, text: item.text.normalize('NFC') }));
 
+// QuranEnc ships Rowwad as SQLite; the fixture is an SQL dump of its rows for the sample ayahs.
+function rowwadSqlite(): string {
+  const file = join(dir, 'english_rwwad.sqlite');
+  if (!existsSync(file)) {
+    const db = new DatabaseSync(file);
+    db.exec(fixture('quranenc-english_rwwad-sample.sql'));
+    db.close();
+  }
+  return file;
+}
+
+const rowwadMeta = {
+  key: 'english_rwwad',
+  title: 'English Translation - Rowwad Translation Center',
+  url: 'https://quranenc.com/en/browse/english_rwwad',
+  version: '1.0.21',
+  fetchedAt: '2026-11-21',
+  sha256: '9ec339776c3a2bdab7dbd922d99ffd14a9e0699d62fca98741207ae73916524a',
+};
+
+// QuranEnc exposes no version for the English Mukhtasar.
+const mukhtasarMeta = {
+  key: 'english_mokhtasar',
+  title: 'Al-Mukhtasar in Interpreting the Noble Quran - English',
+  url: 'https://quranenc.com',
+  version: null,
+  fetchedAt: '2026-11-21',
+  sha256: 'abc123',
+};
+
 const sources = () => ({
   // Rows of KFGQPC's hafsData_v2-0.json, unmodified: Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7
   // and 70:19.
   quranText: fixture('kfgqpc-sample.json'),
+  translations: { en: { ...rowwadMeta, ayahs: readQuranEncSqlite(rowwadSqlite()) } },
+  // Per-surah API results, as fetched, for the same ayahs.
+  tafsirs: {
+    en: {
+      ...mukhtasarMeta,
+      ayahs: parseQuranEncResult(fixture('quranenc-english_mokhtasar-sample.json')),
+    },
+  },
   // The corpus morphology for the same ayahs.
   morphologyText: fixture('morphology-sample.txt'),
   // The same ayahs from QUL's English word-by-word file. One value (1:2:3) was given a trailing
@@ -300,6 +340,87 @@ describe('content build', () => {
 
     const content = createContentRepository(openSqlRunnerTracked(join(dir, 'content.db')));
     expect(await content.getSurah(1, 'en')).toHaveLength(7);
+  });
+
+  it('attaches the English translation with its footnotes and the short tafsir to each ayah', async () => {
+    const content = build();
+
+    const ayahs = await content.getTranslations(1, 'en');
+
+    expect(ayahs.map((a) => a.ayah)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(ayahs[1]).toEqual({
+      ayah: 2,
+      translation: 'All praise be to Allah[1], the Lord[2] of the worlds[3],',
+      footnotes:
+        '[1] Allah is God’s most unique name.\n' +
+        ' [2] The Arabic term "rabb" (translated as "Lord") includes all of the following meanings: "owner, master, ruler, controller, sustainer, provider, guardian and caretaker."\n' +
+        ' [3] "the worlds" means mankind, jinn, and all that exists.',
+      tafsir:
+        '2. All praise belongs to Allah with regards to His essence, attributes and actions, because He is the Creator of everything. Everything belongs to Him and He is the disposer of their affairs; blessing individuals specifically and humans in general.',
+    });
+  });
+
+  it('keeps translation and tafsir verbatim, including the tafsir’s ayah-number prefix', async () => {
+    const content = build();
+
+    const [opening] = await content.getTranslations(1, 'en');
+    const [ayah4] = (await content.getTranslations(2, 'en')).filter((a) => a.ayah === 4);
+
+    expect(opening).toMatchObject({
+      translation: 'In the name of Allah, the Most Compassionate, the Most Merciful.',
+      footnotes: null,
+    });
+    expect(opening.tafsir).toMatch(/^1\. I begin by calling on Allah, Who is Ar-Raḥmān/);
+    expect(ayah4).toMatchObject({
+      ayah: 4,
+      translation:
+        'and those who believe in what has been sent down to you [O Prophet] and in what was sent down before you[5], and in the Hereafter they believe with certainty.',
+      footnotes: '[5] i.e., the Taurāt (Torah) and the Injīl (Gospel), etc.',
+    });
+    expect(ayah4.tafsir).toMatch(/^4\. They believe in the revelation that Allah sent down/);
+  });
+
+  it('records each translation and tafsir with its source and version', async () => {
+    const content = build();
+
+    expect(await content.getEditions()).toEqual([
+      {
+        kind: 'translation',
+        language: 'en',
+        key: 'english_rwwad',
+        title: 'English Translation - Rowwad Translation Center',
+        url: 'https://quranenc.com/en/browse/english_rwwad',
+        version: '1.0.21',
+        fetchedAt: '2026-11-21',
+      },
+      {
+        kind: 'tafsir',
+        language: 'en',
+        key: 'english_mokhtasar',
+        title: 'Al-Mukhtasar in Interpreting the Noble Quran - English',
+        url: 'https://quranenc.com',
+        version: null,
+        fetchedAt: '2026-11-21',
+      },
+    ]);
+  });
+
+  it('refuses a translation that is missing an ayah', () => {
+    const { translations } = sources();
+    const without1v5 = translations.en.ayahs.filter((a) => !(a.surah === 1 && a.ayah === 5));
+
+    expect(() =>
+      build({ translations: { en: { ...translations.en, ayahs: without1v5 } } }),
+    ).toThrow('en translation english_rwwad is missing 1:5');
+  });
+
+  it('refuses a tafsir for an ayah the text does not have', () => {
+    const { tafsirs } = sources();
+    const extra = { surah: 1, ayah: 8, text: '8. ...', footnotes: null };
+
+    expect(() =>
+      build({ tafsirs: { en: { ...tafsirs.en, ayahs: [...tafsirs.en.ayahs, extra] } } }),
+    ).toThrow('en tafsir english_mokhtasar has 1:8, which is not in the text');
   });
 
   it('refuses glosses that do not line up with the words', () => {

@@ -6,6 +6,7 @@ import { describeSegment } from './features.ts';
 import { translationsOf, type Glossary } from './glossary.ts';
 import { bareWord, parseKfgqpc, splitWords } from './kfgqpc.ts';
 import { parseMorphology, type Segment } from './morphology.ts';
+import type { QuranEncEdition } from './quranenc.ts';
 
 /** Word glosses per language code, each keyed by `surah:ayah:word` in QUL's word numbering. */
 export type GlossesByLanguage = Record<string, Record<string, string>>;
@@ -20,6 +21,10 @@ export type BuildOptions = {
   glossary: Glossary;
   /** Where the text's word boundaries differ from the morphology's. Defaults to WORD_ALIGNMENT. */
   alignment?: WordAlignment;
+  /** Full ayah translations per language code (QuranEnc). */
+  translations: Record<string, QuranEncEdition>;
+  /** Short tafsir per language code (QuranEnc). */
+  tafsirs: Record<string, QuranEncEdition>;
   contentVersion: number;
   outFile: string;
 };
@@ -61,10 +66,22 @@ const SCHEMA = `
     term TEXT NOT NULL, language TEXT NOT NULL, name TEXT NOT NULL, definition TEXT NOT NULL,
     PRIMARY KEY (term, language)
   ) WITHOUT ROWID;
+  CREATE TABLE editions (
+    kind TEXT NOT NULL, language TEXT NOT NULL, key TEXT NOT NULL, title TEXT NOT NULL,
+    url TEXT NOT NULL, version TEXT, fetched_at TEXT NOT NULL, sha256 TEXT NOT NULL,
+    PRIMARY KEY (kind, language)
+  ) WITHOUT ROWID;
+  CREATE TABLE ayah_texts (
+    surah INTEGER NOT NULL, ayah INTEGER NOT NULL, kind TEXT NOT NULL, language TEXT NOT NULL,
+    text TEXT NOT NULL, footnotes TEXT,
+    PRIMARY KEY (surah, ayah, kind, language)
+  ) WITHOUT ROWID;
 `;
 
 /** Surahs that open without a Basmala header: in Al-Fatiha it is ayah 1, At-Tawbah has none. */
 const NO_BASMALA_HEADER = new Set([1, 9]);
+
+type EditionKind = 'translation' | 'tafsir';
 
 /** Builds the bundled content database. Throws if the sources disagree. */
 export function buildContentDatabase(options: BuildOptions): void {
@@ -190,6 +207,33 @@ export function buildContentDatabase(options: BuildOptions): void {
       insertTerm.run(termIds.get(term)!, term, entry.ar);
       for (const [language, { name, definition }] of translationsOf(glossary, term)) {
         insertTermTranslation.run(term, language, name, definition);
+      }
+    }
+
+    // Translations and tafsir are stored verbatim: QuranEnc's terms forbid any modification.
+    const insertEdition = db.prepare('INSERT INTO editions VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertAyahText = db.prepare('INSERT INTO ayah_texts VALUES (?, ?, ?, ?, ?, ?)');
+    const editions: [EditionKind, Record<string, QuranEncEdition>][] = [
+      ['translation', options.translations],
+      ['tafsir', options.tafsirs],
+    ];
+    for (const [kind, byLanguage] of editions) {
+      for (const [language, edition] of Object.entries(byLanguage)) {
+        const { key, title, url, version, fetchedAt, sha256 } = edition;
+        insertEdition.run(kind, language, key, title, url, version, fetchedAt, sha256);
+        const covered = new Set<string>();
+        for (const { surah, ayah, text, footnotes } of edition.ayahs) {
+          const ayahKey = `${surah}:${ayah}`;
+          if (!textAyahs.has(ayahKey)) {
+            throw new Error(`${language} ${kind} ${key} has ${ayahKey}, which is not in the text`);
+          }
+          covered.add(ayahKey);
+          insertAyahText.run(surah, ayah, kind, language, text, footnotes);
+        }
+        for (const ayahKey of textAyahs) {
+          if (!covered.has(ayahKey))
+            throw new Error(`${language} ${kind} ${key} is missing ${ayahKey}`);
+        }
       }
     }
 

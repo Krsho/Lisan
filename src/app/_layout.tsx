@@ -29,6 +29,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: 'Lisan' }} />
+        <Stack.Screen name="about" options={{ title: 'About and sources' }} />
       </Stack>
       <StatusBar style="auto" />
     </ContentProvider>

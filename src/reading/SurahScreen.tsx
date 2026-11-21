@@ -1,10 +1,18 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useContent } from '../content/ContentProvider';
-import type { Ayah, LinkedWord, SurahSummary, Word, WordRef } from '../content/repository';
+import type {
+  Ayah,
+  AyahTranslation as AyahTranslationData,
+  LinkedWord,
+  SurahSummary,
+  Word,
+  WordRef,
+} from '../content/repository';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY } from '../theme/quranFont';
+import { AyahTranslation } from './AyahTranslation';
 import { WordDetailSheet } from './WordDetailSheet';
 
 const toArabicDigits = (n: number) =>
@@ -14,14 +22,16 @@ type Props = {
   summary: SurahSummary;
   /** Ayah to scroll to when the surah opens. */
   initialAyah?: number;
-  /** Extra content shown under each ayah's words, e.g. its translation and tafsir. */
-  renderAyahFooter?: (ayah: Ayah) => ReactNode;
 };
 
-type Loaded = { ayahs: Ayah[]; basmala: LinkedWord[] | null };
+type Loaded = {
+  ayahs: Ayah[];
+  basmala: LinkedWord[] | null;
+  translations: Map<number, AyahTranslationData>;
+};
 
-/** A surah word by word: tap a word to see its segments and grammar. */
-export function SurahScreen({ summary, initialAyah, renderAyahFooter }: Props) {
+/** A surah word by word with each ayah's translation: tap a word to see its grammar. */
+export function SurahScreen({ summary, initialAyah }: Props) {
   const { surah, hasBasmala } = summary;
   const content = useContent();
   const colors = useColors();
@@ -35,9 +45,11 @@ export function SurahScreen({ summary, initialAyah, renderAyahFooter }: Props) {
     Promise.all([
       content.getSurah(surah, 'en'),
       hasBasmala ? content.getBasmala('en') : Promise.resolve(null),
+      content.getTranslations(surah, 'en'),
     ]).then(
-      ([ayahs, basmala]) => {
-        if (!cancelled) setLoaded({ ayahs, basmala });
+      ([ayahs, basmala, texts]) => {
+        if (cancelled) return;
+        setLoaded({ ayahs, basmala, translations: new Map(texts.map((t) => [t.ayah, t])) });
       },
       (error: unknown) => {
         console.error('Failed to load surah', surah, error);
@@ -89,18 +101,21 @@ export function SurahScreen({ summary, initialAyah, renderAyahFooter }: Props) {
             </View>
           ) : undefined
         }
-        renderItem={({ item: ayah }) => (
-          <View style={[styles.ayah, { borderColor: colors.border }]}>
-            <WordRow
-              words={ayah.words}
-              ayahNumber={ayah.ayah}
-              onPressWord={(word) =>
-                setSelectedWord({ surah, ayah: ayah.ayah, word: word.position })
-              }
-            />
-            {renderAyahFooter?.(ayah)}
-          </View>
-        )}
+        renderItem={({ item: ayah }) => {
+          const translation = loaded.translations.get(ayah.ayah);
+          return (
+            <View style={[styles.ayah, { borderColor: colors.border }]}>
+              <WordRow
+                words={ayah.words}
+                ayahNumber={ayah.ayah}
+                onPressWord={(word) =>
+                  setSelectedWord({ surah, ayah: ayah.ayah, word: word.position })
+                }
+              />
+              {translation ? <AyahTranslation data={translation} /> : null}
+            </View>
+          );
+        }}
       />
       <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
     </>

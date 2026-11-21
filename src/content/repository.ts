@@ -82,6 +82,27 @@ const toWord = ({ position, text, bare, gloss }: WordRow): Word => ({
   gloss,
 });
 
+/** An ayah's full translation and short tafsir, verbatim from QuranEnc. */
+export type AyahTranslation = {
+  ayah: number;
+  translation: string | null;
+  /** Translator's notes, `[n] note` entries matching `[n]` markers in the translation. */
+  footnotes: string | null;
+  tafsir: string | null;
+};
+
+/** A published translation or tafsir, with what attribution requires: source and version. */
+export type Edition = {
+  kind: 'translation' | 'tafsir';
+  language: string;
+  key: string;
+  title: string;
+  url: string;
+  /** Null where the publisher exposes no version. */
+  version: string | null;
+  fetchedAt: string;
+};
+
 // A term's name and definition in the requested language, falling back to English.
 // The joins expect the terms table as `t` and take the language as their one parameter.
 const TERM_COLUMNS = `COALESCE(tl.name, en.name) AS name, COALESCE(tl.definition, en.definition) AS definition`;
@@ -132,6 +153,28 @@ export function createContentRepository(db: SqlRunner) {
         current.words.push(toWord(row));
       }
       return ayahs;
+    },
+
+    async getTranslations(surah: number, language: Language): Promise<AyahTranslation[]> {
+      return db.all<AyahTranslation>(
+        `SELECT a.ayah, tr.text AS translation, tr.footnotes, tf.text AS tafsir
+           FROM ayahs a
+           LEFT JOIN ayah_texts tr ON tr.surah = a.surah AND tr.ayah = a.ayah
+            AND tr.kind = 'translation' AND tr.language = ?
+           LEFT JOIN ayah_texts tf ON tf.surah = a.surah AND tf.ayah = a.ayah
+            AND tf.kind = 'tafsir' AND tf.language = ?
+          WHERE a.surah = ?
+          ORDER BY a.ayah`,
+        [language, language, surah],
+      );
+    },
+
+    async getEditions(): Promise<Edition[]> {
+      return db.all<Edition>(
+        `SELECT kind, language, key, title, url, version, fetched_at AS fetchedAt
+           FROM editions ORDER BY kind DESC, language`,
+        [],
+      );
     },
 
     async getTerm(key: string, language: Language): Promise<Term> {
