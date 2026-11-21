@@ -4,6 +4,9 @@ import { SettingsProvider } from './SettingsContext';
 import { SettingsScreen } from './SettingsScreen';
 import { DEFAULT_READING_SETTINGS } from './settings';
 
+// The Quran font is kept out of git (see src/theme/quranFont.ts), so CI has no file to load.
+jest.mock('../../assets/fonts/UthmanicHafs-v9.otf', () => 1, { virtual: true });
+
 it('changes the theme, font size and default visibility', async () => {
   const update = jest.fn();
   await render(
