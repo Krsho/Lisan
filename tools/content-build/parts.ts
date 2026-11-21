@@ -34,9 +34,19 @@ const SHORT_WORD_COST = 4;
 /** Each word a part runs past `max` costs this. */
 const LONG_WORD_COST = 6;
 
-/** Where a part may end after this word, how much that costs. */
+/** Whitespace, or one of the Quranic annotation signs (pause marks, sajdah and the like). */
+const TRAILING_SIGN = /[\sۖ-ۭ]/u;
+
+/**
+ * Where a part may end after this word, how much that costs: the cheapest pause mark among the
+ * signs and whitespace that end it, since another sign (such as sajdah) may follow the mark.
+ */
 function breakCost(word: string): number {
-  return BREAK_COST[word.at(-1) ?? ''] ?? UNMARKED_BREAK_COST;
+  let cost = UNMARKED_BREAK_COST;
+  for (let i = word.length - 1; i >= 0 && TRAILING_SIGN.test(word[i]); i--) {
+    cost = Math.min(cost, BREAK_COST[word[i]] ?? UNMARKED_BREAK_COST);
+  }
+  return cost;
 }
 
 /** A part of this many words: parts near the middle of `min`–`max` are best. */

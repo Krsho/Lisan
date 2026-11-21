@@ -68,6 +68,13 @@ describe('splitting long ayahs into parts', () => {
     expect(lengths(ayah(20, { 4: SAJDAH }))).toEqual([10, 10]);
   });
 
+  it('finds a pause mark among trailing marks and whitespace', () => {
+    // As printed, a pause mark may be followed by another sign (here sajdah) or by a space.
+    expect(lengths(ayah(20, { 9: `${JIM}${SAJDAH}` }))).toEqual([9, 11]);
+    expect(lengths(ayah(20, { 9: `${JIM} ` }))).toEqual([9, 11]);
+    expect(lengths(ayah(20, { 9: `${QILA} ` }))).toEqual([9, 11]);
+  });
+
   it('covers every word once, in order', () => {
     const parts = splitAyahIntoParts(ayah(128, { 12: JIM, 30: QILA, 41: SILA, 77: JIM }));
     expect(parts[0].first).toBe(1);
