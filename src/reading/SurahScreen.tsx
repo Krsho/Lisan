@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
@@ -12,23 +12,29 @@ import type { Ayah, AyahTranslation, LinkedWord, SurahSummary } from '../content
 import type { AyahLemmas } from '../engine';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
-import { useEventLog } from '../user/UserStoreProvider';
+import { useBrowsePositions, useEventLog } from '../user/UserStoreProvider';
 import { AddToReview } from './AddToReview';
 import { notesFor, useLinguisticNotes } from './LinguisticNotes';
-import { describePosition } from './position';
+import { JumpToAyah } from './JumpToAyah';
+import { describePosition, pageIndexOf, type Place } from './position';
 import { StudyPager } from './StudyPager';
 import { StudyView } from './StudyView';
 
 type Props = {
   summary: SurahSummary;
-  /** Ayah to open the surah at; the first ayah otherwise. */
+  /** Ayah to open the surah at; where the learner last stopped in it otherwise. */
   initialAyah?: number;
 };
 
-/** A surah one ayah per screen, each fully broken down; swipe right or press Next for the next. */
+/**
+ * A surah one ayah per screen, each fully broken down; swipe right or press Next for the next.
+ * Opens where the learner last stopped in the surah (ayah 1 on a first visit) and remembers each
+ * place they view; tapping the header jumps to any ayah.
+ */
 export function SurahScreen({ summary, initialAyah }: Props) {
   const { surah, hasBasmala } = summary;
   const content = useContent();
+  const positions = useBrowsePositions();
   const state = useAsync(
     () =>
       Promise.all([
@@ -36,14 +42,16 @@ export function SurahScreen({ summary, initialAyah }: Props) {
         hasBasmala ? content.getBasmala('en') : Promise.resolve(null),
         content.getTranslations(surah, 'en'),
         content.getSurahLemmas(surah),
-      ]).then(([ayahs, basmala, texts, lemmas]) => ({
+        initialAyah ? Promise.resolve({ ayah: initialAyah }) : positions.get(surah),
+      ]).then(([ayahs, basmala, texts, lemmas, place]) => ({
         ayahs,
+        initialPlace: place ?? { ayah: 1 },
         basmala,
         translations: new Map(texts.map((t) => [t.ayah, t])),
         // Each ayah's lemmas, by ayah number, for adding it to review.
         lemmas: new Map(lemmas.map((a) => [a.ayah, a])),
       })),
-    [content, surah, hasBasmala],
+    [content, surah, hasBasmala, initialAyah, positions],
     `surah ${surah}`,
   );
 
@@ -55,21 +63,27 @@ export function SurahScreen({ summary, initialAyah }: Props) {
       </>
     );
   }
-  return <SurahPages summary={summary} initialAyah={initialAyah} {...state.data} />;
+  return <SurahPages summary={summary} {...state.data} />;
 }
 
-type PagesProps = Props & {
+type PagesProps = {
+  summary: SurahSummary;
+  /** Where to open: the remembered place, or the ayah asked for. */
+  initialPlace: Place;
   ayahs: Ayah[];
   basmala: LinkedWord[] | null;
   translations: Map<number, AyahTranslation>;
   lemmas: Map<number, AyahLemmas>;
 };
 
-function SurahPages({ summary, initialAyah, ayahs, basmala, translations, lemmas }: PagesProps) {
+/** The place a page shows, as remembered between visits. */
+const placeOf = (ayah: Ayah): Place => ({ ayah: ayah.ayah });
+
+function SurahPages({ summary, initialPlace, ayahs, basmala, translations, lemmas }: PagesProps) {
   const { surah } = summary;
-  const [index, setIndex] = useState(() =>
-    Math.max(0, initialAyah ? ayahs.findIndex((a) => a.ayah === initialAyah) : 0),
-  );
+  const pagePlaces = useMemo(() => ayahs.map(placeOf), [ayahs]);
+  const [index, setIndex] = useState(() => pageIndexOf(pagePlaces, initialPlace));
+  const positions = useBrowsePositions();
   const playback = useAyahPlayback(audioSource);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
   const notes = useLinguisticNotes([surah], 'en');
@@ -80,14 +94,32 @@ function SurahPages({ summary, initialAyah, ayahs, basmala, translations, lemmas
     [playback, notes, events, download],
   );
   const current = ayahs[index];
+  const place = current ? placeOf(current) : null;
+
+  // Remember each place viewed, to reopen the surah there; this records no learning events.
+  const { save } = positions;
+  const placeAyah = place?.ayah;
+  const placePart = place?.part;
+  useEffect(() => {
+    if (placeAyah !== undefined) save({ surah, ayah: placeAyah, part: placePart });
+  }, [save, surah, placeAyah, placePart]);
+  const title = current
+    ? describePosition(summary.nameEnglish, current.ayah, summary.ayahCount)
+    : summary.nameEnglish;
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: current
-            ? describePosition(summary.nameEnglish, current.ayah, summary.ayahCount)
-            : summary.nameEnglish,
+          title,
+          headerTitle: () => (
+            <JumpToAyah
+              title={title}
+              ayahCount={summary.ayahCount}
+              current={current?.ayah ?? 1}
+              onJump={(ayah) => setIndex(pageIndexOf(pagePlaces, { ayah }))}
+            />
+          ),
         }}
       />
       <StudyPager

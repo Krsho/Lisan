@@ -17,7 +17,7 @@ import { parseSettings, serializeSettings, type AppSettings } from '../settings/
 import { useColors } from '../theme/colors';
 import { migrateUserDb } from './migrations';
 import type { UserSqlRunner } from './sql';
-import { createUserStore, type UserStore } from './store';
+import { createUserStore, type BrowsePosition, type UserStore } from './store';
 
 /**
  * The writable user database. Its name is fixed: unlike the content database it is never copied
@@ -74,6 +74,15 @@ type EventLog = {
 };
 
 const EventLogContext = createContext<EventLog | null>(null);
+
+type BrowsePositions = {
+  /** Where the learner last was in a surah in Browse; null on a first visit. */
+  get(surah: number): Promise<BrowsePosition | null>;
+  /** Remembers the place, in the background. Never records a learning event. */
+  save(position: BrowsePosition): void;
+};
+
+const BrowsePositionsContext = createContext<BrowsePositions | null>(null);
 
 type State =
   | { status: 'opening' }
@@ -132,13 +141,27 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
     },
     [store],
   );
+  const positions = useMemo<BrowsePositions | null>(
+    () =>
+      store && {
+        get: (surah) => store.getBrowsePosition(surah),
+        save: (position) => {
+          // Not shown to the learner: a lost place is not lost progress.
+          store.saveBrowsePosition(position, Date.now()).catch((error: unknown) => {
+            console.warn('Failed to save the browse position', error);
+          });
+        },
+      },
+    [store],
+  );
+
   const settings = state.status === 'open' ? state.settings : null;
   const settingsValue = useMemo(
     () => (settings ? { settings, update: updateSettings } : null),
     [settings, updateSettings],
   );
 
-  if (!log || !settingsValue) {
+  if (!log || !settingsValue || !positions) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         {state.status === 'failed' ? (
@@ -152,7 +175,9 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
   return (
     <SettingsProvider value={settingsValue}>
       <EventLogContext.Provider value={log}>
-        {children}
+        <BrowsePositionsContext.Provider value={positions}>
+          {children}
+        </BrowsePositionsContext.Provider>
         {writeFailed ? (
           <View
             accessibilityRole="alert"
@@ -175,6 +200,13 @@ export function useEventLog(): EventLog {
   const log = useContext(EventLogContext);
   if (!log) throw new Error('useEventLog must be used inside UserStoreProvider');
   return log;
+}
+
+/** The place the learner last viewed in each surah in Browse, kept on this device. */
+export function useBrowsePositions(): BrowsePositions {
+  const positions = useContext(BrowsePositionsContext);
+  if (!positions) throw new Error('useBrowsePositions must be used inside UserStoreProvider');
+  return positions;
 }
 
 const styles = StyleSheet.create({
