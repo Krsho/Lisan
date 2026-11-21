@@ -1,10 +1,10 @@
 import { Stack, useRouter } from 'expo-router';
 import { Pressable, Text } from 'react-native';
 
-import { SurahList } from '../browse/SurahList';
+import { TodayScreen } from '../session/TodayScreen';
 import { useColors } from '../theme/colors';
 
-/** Home: browse the whole Quran (the daily session will take this place later). */
+/** Home: today's session, with a way into browsing the whole Quran. */
 export default function HomeRoute() {
   const router = useRouter();
   const colors = useColors();
@@ -19,10 +19,9 @@ export default function HomeRoute() {
           ),
         }}
       />
-      <SurahList
-        onOpenSurah={(surah) =>
-          router.push({ pathname: '/surah/[surah]', params: { surah: String(surah) } })
-        }
+      <TodayScreen
+        onStart={() => router.push('/session')}
+        onBrowse={() => router.push('/browse')}
       />
     </>
   );

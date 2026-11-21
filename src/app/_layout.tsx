@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { ContentProvider } from '../content/ContentProvider';
 import { useColors } from '../theme/colors';
 import { QURAN_FONTS } from '../theme/quranFont';
+import { UserStoreProvider } from '../user/UserStoreProvider';
 
 export default function RootLayout() {
   const colors = useColors();
@@ -21,16 +22,20 @@ export default function RootLayout() {
 
   return (
     <ContentProvider>
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.text,
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      >
-        <Stack.Screen name="index" options={{ title: 'Lisan' }} />
-        <Stack.Screen name="about" options={{ title: 'About and sources' }} />
-      </Stack>
+      <UserStoreProvider>
+        <Stack
+          screenOptions={{
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        >
+          <Stack.Screen name="index" options={{ title: 'Lisan' }} />
+          <Stack.Screen name="session" options={{ title: 'Today' }} />
+          <Stack.Screen name="browse" options={{ title: 'Browse' }} />
+          <Stack.Screen name="about" options={{ title: 'About and sources' }} />
+        </Stack>
+      </UserStoreProvider>
       <StatusBar style="auto" />
     </ContentProvider>
   );
