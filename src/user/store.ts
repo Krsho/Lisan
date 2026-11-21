@@ -20,7 +20,10 @@ type EventRow = {
 const RATINGS = new Set([1, 2, 3, 4]);
 
 /** A place in a surah: an ayah, or one part (1-based) of a long ayah shown in parts. */
-export type BrowsePosition = { surah: number; ayah: number; part?: number };
+export type Place = { ayah: number; part?: number };
+
+/** The place the learner last viewed in a surah in Browse. */
+export type BrowsePosition = Place & { surah: number };
 
 /**
  * The event a row holds; 'unknown' for a kind from a newer app version (synced from another

@@ -1,3 +1,7 @@
+import type { Place } from '../user/store';
+
+export type { Place };
+
 /**
  * Where a study screen is in its surah, for the header: "Al-Baqarah · 5 / 286 · part 2 of 5";
  * without the ayah count when it isn't known.
@@ -11,9 +15,6 @@ export function describePosition(
   const position = `${surahName} · ${ayah}${ayahCount === undefined ? '' : ` / ${ayahCount}`}`;
   return part ? `${position} · part ${part.number} of ${part.count}` : position;
 }
-
-/** A place in a surah's pages: an ayah, or one part (1-based) of a long ayah. */
-export type Place = { ayah: number; part?: number };
 
 /**
  * The page showing a place: that part of the ayah; the ayah's first page if it is no longer in

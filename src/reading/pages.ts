@@ -19,11 +19,11 @@ export function studyPages(ayahs: Ayah[], parts: AyahPart[]): StudyPage[] {
   return ayahs.flatMap(({ surah, ayah, words }): StudyPage[] => {
     const ayahParts = byAyah.get(ayahKey(surah, ayah));
     if (!ayahParts) return [{ key: String(ayah), surah, ayah, words }];
-    return ayahParts.map(({ part, count, first, last }) => ({
+    return ayahParts.map(({ part, count, fromWord, toWord }) => ({
       key: `${ayah}.${part}`,
       surah,
       ayah,
-      words: words.filter((w) => w.position >= first.word && w.position <= last.word),
+      words: words.filter((w) => w.position >= fromWord && w.position <= toWord),
       part: { number: part, count },
     }));
   });

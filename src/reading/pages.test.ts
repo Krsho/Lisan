@@ -18,8 +18,8 @@ const part = (n: number, number: number, count: number, first: number, last: num
   ayah: n,
   part: number,
   count,
-  first: { surah: 2, ayah: n, word: first },
-  last: { surah: 2, ayah: n, word: last },
+  fromWord: first,
+  toWord: last,
 });
 
 it("shows a session's passages one ayah or part a screen, only the parts studied today", () => {

@@ -16,12 +16,7 @@ export function usePath(): AsyncState<Content> {
       return {
         path: path.map((a) => {
           const ayahParts = byAyah.get(ayahKey(a.surah, a.ayah));
-          return ayahParts
-            ? {
-                ...a,
-                parts: ayahParts.map((p) => ({ fromWord: p.first.word, toWord: p.last.word })),
-              }
-            : a;
+          return ayahParts ? { ...a, parts: ayahParts } : a;
         }),
       };
     },
