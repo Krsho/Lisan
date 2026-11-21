@@ -12,6 +12,8 @@ import {
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import type { EventDraft, ReviewEvent } from '../engine';
+import { SettingsProvider } from '../settings/SettingsContext';
+import { parseSettings, serializeSettings, type ReadingSettings } from '../settings/settings';
 import { useColors } from '../theme/colors';
 import { migrateUserDb } from './migrations';
 import type { UserSqlRunner } from './sql';
@@ -74,9 +76,9 @@ const EventLogContext = createContext<EventLog | null>(null);
 type State =
   | { status: 'opening' }
   | { status: 'failed' }
-  | { status: 'open'; store: UserStore; events: ReviewEvent[] };
+  | { status: 'open'; store: UserStore; events: ReviewEvent[]; settings: ReadingSettings };
 
-/** Opens and migrates the user database, then provides the event log to the app. */
+/** Opens and migrates the user database, then provides the event log and settings to the app. */
 export function UserStoreProvider({ children }: { children: ReactNode }) {
   const colors = useColors();
   const [state, setState] = useState<State>({ status: 'opening' });
@@ -85,8 +87,9 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     openUserStore()
       .then(async (store) => {
-        const events = await store.listEvents();
-        if (!cancelled) setState({ status: 'open', store, events });
+        const [events, settingRows] = await Promise.all([store.listEvents(), store.listSettings()]);
+        const settings = parseSettings(settingRows);
+        if (!cancelled) setState({ status: 'open', store, events, settings });
       })
       .catch((error: unknown) => {
         console.error('Failed to open the user database', error);
@@ -109,7 +112,23 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
   const events = state.status === 'open' ? state.events : null;
   const log = useMemo(() => (events ? { events, record } : null), [events, record]);
 
-  if (!log) {
+  const updateSettings = useCallback(
+    (patch: Partial<ReadingSettings>) => {
+      // Shown at once; written in the background, since settings are cheap to set again.
+      setState((s) => (s.status === 'open' ? { ...s, settings: { ...s.settings, ...patch } } : s));
+      store
+        ?.saveSettings(serializeSettings(patch), Date.now())
+        .catch((error: unknown) => console.error('Failed to save settings', error));
+    },
+    [store],
+  );
+  const settings = state.status === 'open' ? state.settings : null;
+  const settingsValue = useMemo(
+    () => (settings ? { settings, update: updateSettings } : null),
+    [settings, updateSettings],
+  );
+
+  if (!log || !settingsValue) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         {state.status === 'failed' ? (
@@ -120,7 +139,11 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
       </View>
     );
   }
-  return <EventLogContext.Provider value={log}>{children}</EventLogContext.Provider>;
+  return (
+    <SettingsProvider value={settingsValue}>
+      <EventLogContext.Provider value={log}>{children}</EventLogContext.Provider>
+    </SettingsProvider>
+  );
 }
 
 export function useEventLog(): EventLog {
