@@ -72,6 +72,7 @@ const playback: AyahPlayback = {
   buffering: false,
   error: null,
   toggle: jest.fn(),
+  stop: jest.fn(),
 };
 
 const words = [mockDetails[1], mockDetails[2]].map(({ position, text, bare, gloss }) => ({

@@ -84,6 +84,9 @@ function SurahPages({ summary, initialPlace, pages, basmala, translations, lemma
   const [index, setIndex] = useState(() => pageIndexOf(pagePlaces, initialPlace));
   const positions = useBrowsePositions();
   const playback = useAyahPlayback(audioSource);
+  // The recitation stops when the learner leaves its page.
+  const { stop } = playback;
+  useEffect(() => stop, [stop, index]);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
   const notes = useLinguisticNotes([surah], 'en');
   const { events, record } = useEventLog();

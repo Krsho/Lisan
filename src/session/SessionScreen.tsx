@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { CenteredStatus } from '../async/CenteredStatus';
@@ -265,6 +265,9 @@ function NewMaterial({
   const colors = useColors();
   const surahs = useSurahs();
   const [index, setIndex] = useState(0);
+  // The recitation stops when the learner leaves its page, or this step of the session.
+  const { stop } = playback;
+  useEffect(() => stop, [stop, index]);
   const extraData = useMemo(
     () => ({ playback, notes, known, finishDisabled, surahs }),
     [playback, notes, known, finishDisabled, surahs],
@@ -422,6 +425,9 @@ function Recap({ pages, loaded, notes, playback, onDone }: RecapProps) {
   const colors = useColors();
   const surahs = useSurahs();
   const [index, setIndex] = useState(0);
+  // The recitation stops when the learner leaves its page, or this step of the session.
+  const { stop } = playback;
+  useEffect(() => stop, [stop, index]);
   // The pages whose word cards the learner opened.
   const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
   const extraData = useMemo(
