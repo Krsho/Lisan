@@ -167,6 +167,22 @@ it('shows the translation and tafsir on a later part that holds them', async () 
   expect(screen.queryByRole('link')).toBeNull();
 });
 
+it('shows only the ayah, audio and translation when compact, the tafsir with the breakdown', async () => {
+  await render(
+    <StudyView
+      passage={whole}
+      translation={translation}
+      notes={[]}
+      playback={playback}
+      showWordCards={false}
+    />,
+  );
+
+  expect(screen.getByRole('button', { name: 'Play the recitation of ayah 2' })).toBeTruthy();
+  expect(screen.getByText('All praise is for Allah.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Show tafsir' })).toBeNull();
+});
+
 it('can show the ayah without word cards', async () => {
   await render(
     <StudyView

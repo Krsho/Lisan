@@ -49,7 +49,10 @@ type Props = {
   playback: AyahPlayback;
   /** On a later part, opens the part where the translation and tafsir are. */
   onOpenTranslationPart?: () => void;
-  /** Whether each word's card shows (default true); the recap shows the ayah without them. */
+  /**
+   * Whether the breakdown shows (default true): each word's card and the tafsir. The recap shows
+   * the ayah, its audio and translation without it until asked.
+   */
   showWordCards?: boolean;
   /** Extra content on a word's card, e.g. the session's "new" badge and "I know this". */
   renderWordExtra?: (word: Word) => ReactNode;
@@ -139,7 +142,8 @@ export function StudyView({
         </View>
       ) : null}
       <LinguisticNotes notes={shownNotes} words={words} />
-      {!laterPart && translation ? <TafsirSection data={translation} /> : null}
+      {/* Compact (the recap), the tafsir waits for the breakdown. */}
+      {showWordCards && !laterPart && translation ? <TafsirSection data={translation} /> : null}
       {footer}
     </ScrollView>
   );
