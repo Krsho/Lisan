@@ -94,6 +94,25 @@ describe('user store', () => {
     ]);
   });
 
+  it('stores a quiz answer with its rating, correctness and response time', async () => {
+    const store = await openStore();
+    const answer = {
+      kind: 'review',
+      lemmaId: 'رَحِيم',
+      wordRef: fatiha,
+      rating: 1,
+      correct: false,
+      responseTimeMs: 4200,
+      timestamp: 9,
+    } as const;
+
+    const [recorded] = await store.record([answer]);
+
+    expect(await store.listEvents()).toEqual([
+      { ...answer, id: recorded.id, deviceId: await store.getDeviceId() },
+    ]);
+  });
+
   it('records where a session stopped, which has no lemma', async () => {
     const store = await openStore();
 

@@ -71,6 +71,18 @@ export type PathAyah = {
   words: { position: number; lemmas: string[] }[];
 };
 
+/** A lemma as quizzes draw wrong options from it. */
+export type LemmaSample = {
+  lemmaId: string;
+  frequency: number;
+  /** Glossary key of the sample word's part of speech, e.g. "pos.noun". Null without a sample. */
+  partOfSpeech: string | null;
+  /** The first word that is this lemma alone, without pause marks; null if it never stands alone. */
+  sample: { bare: string; gloss: string } | null;
+};
+
+type LemmaSampleRow = { lemmaId: string; bare: string; gloss: string; terms: string };
+
 type WordRow = { ayah: number; position: number; text: string; bare: string; gloss: string | null };
 /** `terms` holds the ids of the segment's terms, separated by spaces. */
 type SegmentRow = Omit<Segment, 'terms'> & { terms: string };
@@ -207,6 +219,62 @@ export function createContentRepository(db: SqlRunner) {
         if (lemma && !last.lemmas.includes(lemma)) last.lemmas.push(lemma);
       }
       return path;
+    },
+
+    /**
+     * Every lemma with its frequency and, where it stands alone as a whole word somewhere, its
+     * first such word: its text, gloss and part of speech. Quizzes draw wrong options from these.
+     */
+    async getLemmaSamples(language: Language): Promise<LemmaSample[]> {
+      // Driven from the words (not a join onto every lemma), which keeps it to ~100 ms.
+      const [lemmas, rows, terms] = await Promise.all([
+        db.all<{ lemmaId: string; frequency: number }>(
+          `SELECT lemma AS lemmaId, frequency FROM lemmas ORDER BY lemma`,
+          [],
+        ),
+        db.all<LemmaSampleRow>(
+          `WITH alone AS (
+             SELECT surah, ayah, word, MIN(lemma) AS lemma, MIN(terms) AS terms
+               FROM segments
+              WHERE lemma IS NOT NULL
+              GROUP BY surah, ayah, word
+             HAVING COUNT(*) = 1
+           ),
+           first AS (
+             SELECT lemma, surah, ayah, word, terms, MIN(surah * 1000000 + ayah * 1000 + word)
+               FROM alone GROUP BY lemma
+           )
+           SELECT f.lemma AS lemmaId, COALESCE(w.bare, w.text) AS bare, g.text AS gloss, f.terms
+             FROM first f
+             JOIN words w ON w.surah = f.surah AND w.ayah = f.ayah AND w.position = f.word
+             JOIN glosses g
+               ON g.surah = f.surah AND g.ayah = f.ayah AND g.word = f.word AND g.language = ?`,
+          [language],
+        ),
+        db.all<{ id: number; key: string }>(`SELECT id, term AS key FROM terms`, []),
+      ]);
+      const keys = new Map(terms.map((t) => [t.id, t.key]));
+      const samples = new Map(rows.map((row) => [row.lemmaId, row]));
+      return lemmas.map(({ lemmaId, frequency }) => {
+        const row = samples.get(lemmaId);
+        if (!row) return { lemmaId, frequency, partOfSpeech: null, sample: null };
+        const partOfSpeech =
+          row.terms
+            .split(' ')
+            .map((id) => keys.get(Number(id)))
+            .find((key) => key?.startsWith('pos.') || key?.startsWith('particle.')) ?? null;
+        return { lemmaId, frequency, partOfSpeech, sample: { bare: row.bare, gloss: row.gloss } };
+      });
+    },
+
+    /** Every glossary term, e.g. to name the options of a grammar question. */
+    async listTerms(language: Language): Promise<Term[]> {
+      return db.all<Term>(
+        `SELECT t.term AS key, t.arabic, ${TERM_COLUMNS}
+           FROM terms t ${TERM_TRANSLATION_JOINS}
+          ORDER BY t.id`,
+        [language],
+      );
     },
 
     /** The content database's version, for the about screen and mistake reports. */

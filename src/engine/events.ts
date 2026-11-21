@@ -26,12 +26,30 @@ export type KnownUndoneEvent = EventBase & {
 /** A session was completed: the path is studied up to and including this word. */
 export type CompletedEvent = EventBase & { kind: 'completed'; lemmaId: null; wordRef: WordRef };
 
+/** FSRS's four ratings: 1 again, 2 hard, 3 good, 4 easy. */
+export type Rating = 1 | 2 | 3 | 4;
+
+export const RATING = { again: 1, hard: 2, good: 3, easy: 4 } as const;
+
+/**
+ * A quiz or review answer on a lemma, in the word form it was asked in. The rating comes from
+ * correctness and speed (gradeAnswer): learners never grade themselves.
+ */
+export type GradedEvent = EventBase & {
+  kind: 'review';
+  lemmaId: string;
+  wordRef: WordRef;
+  rating: Rating;
+  correct: boolean;
+  responseTimeMs: number;
+};
+
 /**
  * One entry of the learner's append-only log. Everything about progress (path position, learned
  * and known lemmas, and later card state and streaks) is derived from the log; nothing else is
  * stored, so logs from several devices can be merged by union.
  */
-export type ReviewEvent = LearnEvent | KnownEvent | KnownUndoneEvent | CompletedEvent;
+export type ReviewEvent = LearnEvent | KnownEvent | KnownUndoneEvent | CompletedEvent | GradedEvent;
 
 export type EventKind = ReviewEvent['kind'];
 
