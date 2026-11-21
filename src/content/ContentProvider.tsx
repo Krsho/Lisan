@@ -2,17 +2,21 @@ import { SQLiteProvider, useSQLiteContext } from 'expo-sqlite';
 import { useMemo, type ReactNode } from 'react';
 
 import { createContentRepository, type ContentRepository, type SqlRunner } from './repository';
-import { CONTENT_VERSION } from './version';
+import { useActiveContent } from './update/useActiveContent';
 
-// The file name carries the content version, so a newer bundled database is copied in
-// instead of the app reusing the copy from a previous install.
-const DATABASE_NAME = `content-v${CONTENT_VERSION}.db`;
+const BUNDLED_DATABASE = { assetId: require('../../assets/content/content.db') };
 
+// File names carry the content version (content-vN.db), so a newer bundled database is copied
+// in instead of reusing a previous install's copy. A downloaded database (src/content/update)
+// is already in place and opens without the asset.
 export function ContentProvider({ children }: { children: ReactNode }) {
+  const { active, onOpenError } = useActiveContent();
   return (
     <SQLiteProvider
-      databaseName={DATABASE_NAME}
-      assetSource={{ assetId: require('../../assets/content/content.db') }}
+      key={active.databaseName}
+      databaseName={active.databaseName}
+      assetSource={active.bundled ? BUNDLED_DATABASE : undefined}
+      onError={onOpenError}
     >
       {children}
     </SQLiteProvider>

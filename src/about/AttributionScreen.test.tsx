@@ -25,7 +25,7 @@ const editions: Edition[] = [
 ];
 
 // The content database is the boundary: the screen reads edition versions from it.
-const mockContent = { getEditions: async () => editions };
+const mockContent = { getEditions: async () => editions, getContentVersion: async () => 6 };
 jest.mock('../content/ContentProvider', () => ({ useContent: () => mockContent }));
 
 it('credits every source with a link, and each QuranEnc edition with its version', async () => {
@@ -50,4 +50,9 @@ it('credits every source with a link, and each QuranEnc edition with its version
     expect(screen.getByText(url)).toBeTruthy();
   }
   expect(screen.getByText('Reciters')).toBeTruthy();
+});
+
+it('shows the content version, so a mistake report can name it', async () => {
+  await render(<AttributionScreen />);
+  expect(await screen.findByText('Content version 6')).toBeTruthy();
 });

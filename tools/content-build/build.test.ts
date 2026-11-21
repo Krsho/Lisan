@@ -329,6 +329,11 @@ describe('content build', () => {
     expect(() => build({ morphologyText: extra })).toThrow('Morphology has words for 3:1');
   });
 
+  it('exposes its content version', async () => {
+    const content = build({ contentVersion: 7 });
+    await expect(content.getContentVersion()).resolves.toBe(7);
+  });
+
   it('leaves the previous database untouched when a build fails', async () => {
     const outFile = join(dir, 'content.db');
     const options = { ...sources(), contentVersion: 1, outFile };
