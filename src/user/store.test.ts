@@ -306,3 +306,32 @@ describe('settings in the user database', () => {
     ]);
   });
 });
+
+describe('browse positions in the user database', () => {
+  it('has none for a surah not yet browsed', async () => {
+    const store = await openStore();
+
+    expect(await store.getBrowsePosition(2)).toBeNull();
+  });
+
+  it('keeps the last place viewed in each surah, with the part of a long ayah', async () => {
+    const store = await openStore();
+
+    await store.saveBrowsePosition({ surah: 2, ayah: 5 }, 1);
+    await store.saveBrowsePosition({ surah: 2, ayah: 282, part: 3 }, 2);
+    await store.saveBrowsePosition({ surah: 1, ayah: 4 }, 3);
+
+    const again = createUserStore(db, randomUUID);
+    expect(await again.getBrowsePosition(2)).toEqual({ surah: 2, ayah: 282, part: 3 });
+    expect(await again.getBrowsePosition(1)).toEqual({ surah: 1, ayah: 4 });
+  });
+
+  it('records no learning events', async () => {
+    const store = await openStore();
+
+    await store.saveBrowsePosition({ surah: 2, ayah: 255, part: 2 }, 1);
+
+    expect(await store.listEvents()).toEqual([]);
+    expect(await db.all('SELECT id FROM review_events', [])).toEqual([]);
+  });
+});
