@@ -3,6 +3,7 @@ import {
   gradeAnswer,
   lemmaCards,
   markKnown,
+  NEVER_REVIEWED_LIMIT,
   planReview,
   planSession,
   RATING,
@@ -236,6 +237,46 @@ describe('the daily review', () => {
     expect(plan([added], START + MINUTE).reviews).toEqual([
       { lemmaId: 'رَبّ', wordRef: { surah: 2, ayah: 21, word: 3 } },
     ]);
+  });
+
+  describe('with many cards never reviewed (added from browse)', () => {
+    const addedAt = START + 29 * DAY;
+    const added = (count: number): ReviewEvent[] =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `added-${i}`,
+        deviceId: 'device-a',
+        kind: 'added',
+        lemmaId: `browsed-${i}`,
+        wordRef: { surah: 2, ayah: 255, word: i + 1 },
+        timestamp: addedAt,
+      }));
+    const isAdded = (r: { lemmaId: string }) => r.lemmaId.startsWith('browsed-');
+
+    it(`gives them at most ${NEVER_REVIEWED_LIMIT} of the review when learned cards are due`, () => {
+      const log = [...fortyLearned(), ...added(30)];
+
+      const { reviews } = plan(log, START + 30 * DAY);
+
+      expect(reviews).toHaveLength(REVIEW_LIMIT);
+      expect(reviews.filter(isAdded)).toHaveLength(NEVER_REVIEWED_LIMIT);
+    });
+
+    it('fills the review with them when few learned cards are due', () => {
+      // Ayah 1's words were all reviewed on day 29; only the two forgotten then are due on day 31.
+      const forgotten = [lemmaAt(1, 7), lemmaAt(1, 8)];
+      let log = session([], START);
+      log = record(log, answer(lemmasOf(1).slice(0, 6), RATING.good, START + 29 * DAY));
+      log = record(log, answer(forgotten, RATING.again, START + 29 * DAY));
+      log = [...log, ...added(30)];
+
+      const { reviews } = plan(log, START + 31 * DAY);
+
+      expect(reviews).toHaveLength(REVIEW_LIMIT);
+      expect(reviews.filter((r) => !isAdded(r)).map((r) => r.lemmaId)).toEqual(
+        expect.arrayContaining(forgotten),
+      );
+      expect(reviews.filter(isAdded)).toHaveLength(REVIEW_LIMIT - forgotten.length);
+    });
   });
 
   it('reviews a lemma added to review from a browsed ayah, due at once', () => {

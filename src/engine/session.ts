@@ -1,4 +1,4 @@
-import { lemmaCards, retrievability } from './cards';
+import { lemmaCards, retrievability, type LemmaCard } from './cards';
 import { chronological, type EventDraft, type ReviewEvent, type WordRef } from './events';
 
 /** The moment to plan for, with the learner's UTC offset there, which sets where a day begins. */
@@ -49,6 +49,12 @@ export type ReviewCard = { lemmaId: string; wordRef: WordRef };
 /** At most this many cards are reviewed in a session, however many are due. */
 export const REVIEW_LIMIT = 15;
 
+/**
+ * Of those, at most this many are cards never reviewed yet while cards already reviewed are due
+ * (more when fewer of those are due).
+ */
+export const NEVER_REVIEWED_LIMIT = 5;
+
 /** After this many days without a session, the next one opens with a recap. */
 export const RECAP_GAP_DAYS = 7;
 
@@ -57,7 +63,7 @@ export const RECAP_AYAHS = 3;
 
 export type SessionPlan = {
   /**
-   * The cards to review first, most at risk of being forgotten first: at most REVIEW_LIMIT. Cards
+   * The cards to review first (see dueReviews for the order): at most REVIEW_LIMIT. Cards
    * due beyond the limit wait, unannounced, so missed days never show as a backlog.
    */
   reviews: ReviewCard[];
@@ -202,10 +208,7 @@ export function planSession(
       }
     }
 
-    if (
-      newLemmas.length + introduced.length <= budget &&
-      studiedWords + rest.length <= wordLimit
-    ) {
+    if (newLemmas.length + introduced.length <= budget && studiedWords + rest.length <= wordLimit) {
       newMaterial.push({
         surah,
         ayah,
@@ -256,24 +259,35 @@ export function planSession(
 }
 
 /**
- * The cards due now, lowest retrievability first (a card never reviewed counts as forgotten, and
- * among equals the longest overdue goes first), capped at REVIEW_LIMIT. "I know this" lemmas are
- * never reviewed.
+ * The cards due now, capped at REVIEW_LIMIT, with at most NEVER_REVIEWED_LIMIT cards never
+ * reviewed yet (added from browse, or learned but left unquizzed) while reviewed cards are due,
+ * so that they never crowd out learned words that are slipping. Never-reviewed cards come first,
+ * oldest first; then reviewed cards, lowest retrievability first (among equals the longest
+ * overdue). Slots one group leaves spare go to the other. "I know this" lemmas are never reviewed.
  */
 function dueReviews(log: ReviewEvent[], now: Now): ReviewCard[] {
   const known = knownLemmas(log);
-  return [...lemmaCards(log).values()]
-    .filter((c) => c.due <= now.time && !known.has(c.lemmaId))
+  const due = [...lemmaCards(log).values()].filter(
+    (c) => c.due <= now.time && !known.has(c.lemmaId),
+  );
+  const byDue = (a: LemmaCard, b: LemmaCard) => a.due - b.due || byId(a.lemmaId, b.lemmaId);
+  const fresh = due.filter((c) => c.lastReview === null).sort(byDue);
+  const reviewed = due
+    .filter((c) => c.lastReview !== null)
     .map((card) => ({ card, risk: retrievability(card, now.time) }))
-    .sort(
-      (a, b) =>
-        a.risk - b.risk ||
-        a.card.due - b.card.due ||
-        (a.card.lemmaId < b.card.lemmaId ? -1 : a.card.lemmaId > b.card.lemmaId ? 1 : 0),
-    )
-    .slice(0, REVIEW_LIMIT)
-    .map(({ card }) => ({ lemmaId: card.lemmaId, wordRef: card.wordRef }));
+    .sort((a, b) => a.risk - b.risk || byDue(a.card, b.card))
+    .map(({ card }) => card);
+
+  const freshCount = Math.min(
+    fresh.length,
+    Math.max(NEVER_REVIEWED_LIMIT, REVIEW_LIMIT - reviewed.length),
+  );
+  return [...fresh.slice(0, freshCount), ...reviewed.slice(0, REVIEW_LIMIT - freshCount)].map(
+    (card) => ({ lemmaId: card.lemmaId, wordRef: card.wordRef }),
+  );
 }
+
+const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * The last RECAP_AYAHS ayahs studied before `start`, if the last session (a completed one, or
