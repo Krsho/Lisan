@@ -23,6 +23,12 @@ export type KnownUndoneEvent = EventBase & {
   wordRef: WordRef;
 };
 
+/**
+ * "Add this ayah to my review" while browsing: the lemma enters the review deck as a new card, due
+ * at once, in the word form where it was added. It says nothing about the curated path.
+ */
+export type AddedEvent = EventBase & { kind: 'added'; lemmaId: string; wordRef: WordRef };
+
 /** A session was completed: the path is studied up to and including this word. */
 export type CompletedEvent = EventBase & { kind: 'completed'; lemmaId: null; wordRef: WordRef };
 
@@ -49,7 +55,8 @@ export type GradedEvent = EventBase & {
  * and known lemmas, and later card state and streaks) is derived from the log; nothing else is
  * stored, so logs from several devices can be merged by union.
  */
-export type ReviewEvent = LearnEvent | KnownEvent | KnownUndoneEvent | CompletedEvent | GradedEvent;
+export type ReviewEvent =
+  LearnEvent | KnownEvent | KnownUndoneEvent | AddedEvent | CompletedEvent | GradedEvent;
 
 export type EventKind = ReviewEvent['kind'];
 

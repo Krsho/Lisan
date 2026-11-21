@@ -16,7 +16,7 @@ type EventRow = {
   device_id: string;
 };
 
-const KINDS = new Set<string>(['learn', 'known', 'known-undone', 'completed', 'review']);
+const KINDS = new Set<string>(['learn', 'known', 'known-undone', 'added', 'completed', 'review']);
 const RATINGS = new Set([1, 2, 3, 4]);
 
 function toEvent(row: EventRow): ReviewEvent | null {

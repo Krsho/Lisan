@@ -13,8 +13,11 @@ import type {
   Word,
   WordRef,
 } from '../content/repository';
+import type { AyahLemmas } from '../engine';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
+import { useEventLog } from '../user/UserStoreProvider';
+import { AddToReview } from './AddToReview';
 import { AyahTranslation } from './AyahTranslation';
 import { LinguisticNotes, notesFor, useLinguisticNotes } from './LinguisticNotes';
 import { WordDetailSheet } from './WordDetailSheet';
@@ -32,6 +35,8 @@ type Loaded = {
   ayahs: Ayah[];
   basmala: LinkedWord[] | null;
   translations: Map<number, AyahTranslationData>;
+  /** Each ayah's lemmas, by ayah number, for adding it to review. */
+  lemmas: Map<number, AyahLemmas>;
 };
 
 /** A surah word by word with each ayah's translation: tap a word to see its grammar. */
@@ -46,7 +51,8 @@ export function SurahScreen({ summary, initialAyah }: Props) {
   const playback = useAyahPlayback(audioSource);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
   const notes = useLinguisticNotes([surah], 'en');
-  const listExtraData = useMemo(() => ({ playback, notes }), [playback, notes]);
+  const { events, record } = useEventLog();
+  const listExtraData = useMemo(() => ({ playback, notes, events }), [playback, notes, events]);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,10 +60,16 @@ export function SurahScreen({ summary, initialAyah }: Props) {
       content.getSurah(surah, 'en'),
       hasBasmala ? content.getBasmala('en') : Promise.resolve(null),
       content.getTranslations(surah, 'en'),
+      content.getSurahLemmas(surah),
     ]).then(
-      ([ayahs, basmala, texts]) => {
+      ([ayahs, basmala, texts, lemmas]) => {
         if (cancelled) return;
-        setLoaded({ ayahs, basmala, translations: new Map(texts.map((t) => [t.ayah, t])) });
+        setLoaded({
+          ayahs,
+          basmala,
+          translations: new Map(texts.map((t) => [t.ayah, t])),
+          lemmas: new Map(lemmas.map((a) => [a.ayah, a])),
+        });
       },
       (error: unknown) => {
         console.error('Failed to load surah', surah, error);
@@ -90,7 +102,8 @@ export function SurahScreen({ summary, initialAyah }: Props) {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         data={loaded.ayahs}
-        // Redraw the play buttons when playback changes, and the ayahs once their notes load.
+        // Redraw the play buttons when playback changes, the ayahs once their notes load, and
+        // "Add this ayah to my review" when the log changes.
         extraData={listExtraData}
         keyExtractor={(ayah) => String(ayah.ayah)}
         initialNumToRender={Math.max(8, initialIndex + 4)}
@@ -116,6 +129,7 @@ export function SurahScreen({ summary, initialAyah }: Props) {
         }
         renderItem={({ item: ayah }) => {
           const translation = loaded.translations.get(ayah.ayah);
+          const lemmas = loaded.lemmas.get(ayah.ayah);
           return (
             <View style={[styles.ayah, { borderColor: colors.border }]}>
               <AyahPlayButton ayahRef={{ surah, ayah: ayah.ayah }} playback={playback} />
@@ -128,6 +142,7 @@ export function SurahScreen({ summary, initialAyah }: Props) {
               />
               {translation ? <AyahTranslation data={translation} /> : null}
               <LinguisticNotes notes={notesFor(notes, surah, ayah.ayah)} words={ayah.words} />
+              {lemmas ? <AddToReview ayah={lemmas} events={events} record={record} /> : null}
             </View>
           );
         }}

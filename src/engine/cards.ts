@@ -57,13 +57,14 @@ export type LemmaCard = {
   lapses: number;
   stability: number;
   difficulty: number;
-  /** When it was last reviewed, in epoch milliseconds. */
+  /** When it was last reviewed, in epoch milliseconds; for a card never reviewed, when it is due. */
   lastReview: number;
 };
 
 /**
  * Every lemma's card, derived by replaying the log's review events through FSRS in order. Only
- * reviewed lemmas have a card; cards are never stored, so merged logs reschedule consistently.
+ * reviewed lemmas, and lemmas added to review from a browsed ayah (new cards, due when added),
+ * have a card; cards are never stored, so merged logs reschedule consistently.
  */
 export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
   const ordered = chronological(log);
@@ -75,6 +76,15 @@ export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
   }
   const cards = new Map<string, { card: FsrsCard; wordRef: WordRef }>();
   for (const event of ordered) {
+    if (event.kind === 'added') {
+      // A browsed ayah's lemma starts as a new card, due at once, unless it already has one.
+      if (!cards.has(event.lemmaId))
+        cards.set(event.lemmaId, {
+          card: scheduler.newCard({ now: new Date(event.timestamp) }),
+          wordRef: event.wordRef,
+        });
+      continue;
+    }
     if (event.kind !== 'review') continue;
     const now = new Date(event.timestamp);
     // Cards are keyed by lemma here. ts-fsrs only gives cards ids of its own (with crypto, which
