@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { AyahPlayButton, RecitationCredit, RecitationError } from '../audio/RecitationControls';
+import { audioSource } from '../audio/source';
+import { useAyahPlayback, type AyahPlayback } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
 import type {
   Ayah,
@@ -90,6 +93,8 @@ function Session({ content, onDone }: Props & { content: Content }) {
   const [startEvents] = useState(events);
   const [reviewResult, setReviewResult] = useState<QuizResult | null>(null);
   const [recapDone, setRecapDone] = useState(false);
+  // One player for the session's ayahs, new and recapped, streamed or from a download.
+  const playback = useAyahPlayback(audioSource);
   const known = useMemo(() => knownLemmas(events), [events]);
   const surahs = useMemo(
     () => [...new Set([...plan.recap, ...plan.newMaterial].map((p) => p.surah))],
@@ -170,7 +175,14 @@ function Session({ content, onDone }: Props & { content: Content }) {
   }
 
   if (plan.recap.length > 0 && !recapDone) {
-    return <Recap passages={plan.recap} loaded={loaded} onDone={() => setRecapDone(true)} />;
+    return (
+      <Recap
+        passages={plan.recap}
+        loaded={loaded}
+        playback={playback}
+        onDone={() => setRecapDone(true)}
+      />
+    );
   }
 
   if (learnedNow !== null && quiz !== null && quiz.length > 0 && quizResult === null) {
@@ -184,7 +196,7 @@ function Session({ content, onDone }: Props & { content: Content }) {
     return (
       <Summary
         content={content}
-        learnedNow={learnedNow ?? 0}
+        learnedNow={learnedNow}
         reviewResult={reviewResult}
         quizResult={quizResult}
         onDone={onDone}
@@ -224,32 +236,24 @@ function Session({ content, onDone }: Props & { content: Content }) {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
       >
-        {plan.newMaterial.map((passage) => {
-          const ayah = loaded.ayahs.get(ayahKey(passage.surah, passage.ayah));
-          const translation = loaded.translations.get(ayahKey(passage.surah, passage.ayah));
-          return ayah ? (
-            <View
-              key={ayahKey(passage.surah, passage.ayah)}
-              style={[styles.ayah, { borderColor: colors.border }]}
-            >
-              <Text style={[styles.reference, { color: colors.muted }]}>
-                {passage.surah}:{passage.ayah}
-              </Text>
-              <PassageWords
-                ayah={ayah}
-                passage={passage}
-                onPressWord={(word) =>
-                  setSelectedWord({ surah: ayah.surah, ayah: ayah.ayah, word: word.position })
-                }
-              />
-              {translation ? <AyahTranslation data={translation} /> : null}
+        <RecitationCredit source={audioSource} />
+        <RecitationError error={playback.error} />
+        {plan.newMaterial.map((passage) => (
+          <PassageView
+            key={ayahKey(passage.surah, passage.ayah)}
+            passage={passage}
+            loaded={loaded}
+            playback={playback}
+            onPressWord={setSelectedWord}
+          >
+            {(ayah) => (
               <LinguisticNotes
                 notes={notesFor(notes, passage.surah, passage.ayah)}
                 words={ayah.words}
               />
-            </View>
-          ) : null;
-        })}
+            )}
+          </PassageView>
+        ))}
 
         <Text style={[styles.heading, { color: colors.text }]}>New words</Text>
         {plan.newLemmas.length === 0 ? (
@@ -343,10 +347,51 @@ function PassageWords({ ayah, passage, onPressWord }: PassageWordsProps) {
   );
 }
 
-type RecapProps = { passages: Passage[]; loaded: Loaded; onDone: () => void };
+type PassageViewProps = {
+  passage: Passage;
+  loaded: Loaded;
+  playback: AyahPlayback;
+  onPressWord: (ref: WordRef) => void;
+  /** More to show under the ayah, such as its linguistic notes. */
+  children?: (ayah: Ayah) => ReactNode;
+};
+
+/** One ayah of the session: its reference and recitation, its words, and its translation. */
+function PassageView({ passage, loaded, playback, onPressWord, children }: PassageViewProps) {
+  const colors = useColors();
+  const ayah = loaded.ayahs.get(ayahKey(passage.surah, passage.ayah));
+  const translation = loaded.translations.get(ayahKey(passage.surah, passage.ayah));
+  if (!ayah) return null;
+  return (
+    <View style={[styles.ayah, { borderColor: colors.border }]}>
+      <View style={styles.ayahHeader}>
+        <AyahPlayButton ayahRef={{ surah: ayah.surah, ayah: ayah.ayah }} playback={playback} />
+        <Text style={[styles.reference, { color: colors.muted }]}>
+          {passage.surah}:{passage.ayah}
+        </Text>
+      </View>
+      <PassageWords
+        ayah={ayah}
+        passage={passage}
+        onPressWord={(word) =>
+          onPressWord({ surah: ayah.surah, ayah: ayah.ayah, word: word.position })
+        }
+      />
+      {translation ? <AyahTranslation data={translation} /> : null}
+      {children?.(ayah)}
+    </View>
+  );
+}
+
+type RecapProps = {
+  passages: Passage[];
+  loaded: Loaded;
+  playback: AyahPlayback;
+  onDone: () => void;
+};
 
 /** After a gap of a week or more: the last few ayahs studied, to read again before going on. */
-function Recap({ passages, loaded, onDone }: RecapProps) {
+function Recap({ passages, loaded, playback, onDone }: RecapProps) {
   const colors = useColors();
   const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
   return (
@@ -359,28 +404,17 @@ function Recap({ passages, loaded, onDone }: RecapProps) {
         <Text style={[styles.body, { color: colors.muted }]}>
           Here are the last ayahs you studied, to pick up where you left off.
         </Text>
-        {passages.map((passage) => {
-          const ayah = loaded.ayahs.get(ayahKey(passage.surah, passage.ayah));
-          const translation = loaded.translations.get(ayahKey(passage.surah, passage.ayah));
-          return ayah ? (
-            <View
-              key={ayahKey(passage.surah, passage.ayah)}
-              style={[styles.ayah, { borderColor: colors.border }]}
-            >
-              <Text style={[styles.reference, { color: colors.muted }]}>
-                {passage.surah}:{passage.ayah}
-              </Text>
-              <PassageWords
-                ayah={ayah}
-                passage={passage}
-                onPressWord={(word) =>
-                  setSelectedWord({ surah: ayah.surah, ayah: ayah.ayah, word: word.position })
-                }
-              />
-              {translation ? <AyahTranslation data={translation} /> : null}
-            </View>
-          ) : null;
-        })}
+        <RecitationCredit source={audioSource} />
+        <RecitationError error={playback.error} />
+        {passages.map((passage) => (
+          <PassageView
+            key={ayahKey(passage.surah, passage.ayah)}
+            passage={passage}
+            loaded={loaded}
+            playback={playback}
+            onPressWord={setSelectedWord}
+          />
+        ))}
         <Pressable
           accessibilityRole="button"
           onPress={onDone}
@@ -402,7 +436,8 @@ function Summary({
   onDone,
 }: {
   content: Content;
-  learnedNow: number;
+  /** How many lemmas the session learned; null if it was a review only (the path is finished). */
+  learnedNow: number | null;
   reviewResult: QuizResult | null;
   quizResult: QuizResult | null;
   onDone: () => void;
@@ -430,7 +465,9 @@ function Summary({
           Review: {reviewResult.correct} of {reviewResult.total} right
         </Text>
       ) : null}
-      <Text style={[styles.body, { color: colors.text }]}>New words today: {learnedNow}</Text>
+      {learnedNow !== null ? (
+        <Text style={[styles.body, { color: colors.text }]}>New words today: {learnedNow}</Text>
+      ) : null}
       {quizResult ? (
         <Text style={[styles.body, { color: colors.text }]}>
           Quiz: {quizResult.correct} of {quizResult.total} right
@@ -443,7 +480,8 @@ function Summary({
           ? 'You have finished the path.'
           : `Next: ${surahs.status === 'loaded' ? describePassages(next.newMaterial, surahs.surahs) : '…'}`}
       </Text>
-      <ReminderOffer />
+      {/* Offered after a session on the path, not after a review on its own. */}
+      {learnedNow !== null ? <ReminderOffer /> : null}
       <Pressable
         accessibilityRole="button"
         onPress={onDone}
@@ -459,7 +497,8 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
   content: { padding: 16, gap: 12 },
   ayah: { paddingBottom: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  reference: { fontSize: 13, marginBottom: 4 },
+  ayahHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  reference: { fontSize: 13 },
   // Arabic reads right to left, so words flow from the right edge.
   words: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 12, columnGap: 14 },
   // Quran text sizes come from the font size setting (useQuranTextSize).
