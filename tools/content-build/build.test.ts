@@ -15,7 +15,7 @@ const fixture = (name: string) => readFileSync(join(__dirname, '__fixtures__', n
 const nfc = <T extends { text: string }>(items: T[]) =>
   items.map((item) => ({ ...item, text: item.text.normalize('NFC') }));
 
-// QuranEnc ships Rowwad as SQLite; the fixture is an SQL dump of its Al-Fatiha and 2:4 rows.
+// QuranEnc ships Rowwad as SQLite; the fixture is an SQL dump of its rows for the sample ayahs.
 function rowwadSqlite(): string {
   const file = join(dir, 'english_rwwad.sqlite');
   if (!existsSync(file)) {
@@ -46,18 +46,21 @@ const mukhtasarMeta = {
 };
 
 const sources = () => ({
+  // Rows of KFGQPC's hafsData_v2-0.json, unmodified: Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7
+  // and 70:19.
+  quranText: fixture('kfgqpc-sample.json'),
   translations: { en: { ...rowwadMeta, ayahs: readQuranEncSqlite(rowwadSqlite()) } },
-  // Per-surah API results, as fetched (Al-Fatiha and 2:4).
+  // Per-surah API results, as fetched, for the same ayahs.
   tafsirs: {
     en: {
       ...mukhtasarMeta,
       ayahs: parseQuranEncResult(fixture('quranenc-english_mokhtasar-sample.json')),
     },
   },
-  tanzilText: fixture('tanzil-sample.txt'),
+  // The corpus morphology for the same ayahs.
   morphologyText: fixture('morphology-sample.txt'),
-  // Al-Fatiha + 2:4 extract of QUL's English word-by-word file. One value (1:2:3) was given a
-  // trailing space, as several real QUL values have (e.g. 3:2:1 "Allah ").
+  // The same ayahs from QUL's English word-by-word file. One value (1:2:3) was given a trailing
+  // space, as several real QUL values have (e.g. 3:2:1 "Allah ").
   glosses: { en: parseQulWordByWord(fixture('qul-english-word-by-word-sample.json')) },
   // The real, authored glossary: the build must be able to explain every tag in the sample.
   glossary: parseGlossary(
@@ -84,26 +87,34 @@ function openSqlRunnerTracked(file: string) {
 
 function build(overrides: Partial<Parameters<typeof buildContentDatabase>[0]> = {}) {
   const outFile = join(dir, 'content.db');
-  buildContentDatabase({ ...sources(), surahs: [1], contentVersion: 1, outFile, ...overrides });
+  buildContentDatabase({ ...sources(), contentVersion: 1, outFile, ...overrides });
   return createContentRepository(openSqlRunnerTracked(outFile));
 }
 
+const withoutMorphologyFor = (prefix: string) =>
+  sources()
+    .morphologyText.split('\n')
+    .filter((line) => !line.startsWith(prefix))
+    .join('\n');
+
 describe('content build', () => {
-  it('builds Al-Fatiha word by word with English glosses', async () => {
+  it('builds Al-Fatiha word by word from the KFGQPC text with English glosses', async () => {
     const content = build();
 
     const ayahs = await content.getSurah(1, 'en');
 
     expect(ayahs).toHaveLength(7);
-    // Tanzil's text is kept verbatim, and its mark order (e.g. shadda before fatha) differs from
-    // how these literals were typed, so compare Unicode-normalized forms.
-    expect(nfc(ayahs[0].words)).toEqual([
-      { position: 1, text: 'بِسْمِ', gloss: 'In (the) name' },
+    // KFGQPC's text is kept verbatim (e.g. its small high sukun ۡ), and its mark order differs
+    // from how these literals were typed, so compare Unicode-normalized forms.
+    expect(
+      nfc(ayahs[0].words).map(({ position, text, gloss }) => ({ position, text, gloss })),
+    ).toEqual([
+      { position: 1, text: 'بِسۡمِ', gloss: 'In (the) name' },
       { position: 2, text: 'ٱللَّهِ', gloss: '(of) Allah' },
-      { position: 3, text: 'ٱلرَّحْمَٰنِ', gloss: 'the Most Gracious' },
+      { position: 3, text: 'ٱلرَّحۡمَٰنِ', gloss: 'the Most Gracious' },
       { position: 4, text: 'ٱلرَّحِيمِ', gloss: 'the Most Merciful' },
     ]);
-    expect(ayahs[6].words.map((w) => w.text)).toHaveLength(9);
+    expect(ayahs[6].words).toHaveLength(9);
   });
 
   it('uses QUL glosses without its ayah-number entries or stray whitespace', async () => {
@@ -119,8 +130,105 @@ describe('content build', () => {
     ]);
   });
 
+  it('leaves out the ayah-end glyph and the rubʿ al-ḥizb mark ۞, which are not words', async () => {
+    const content = build();
+
+    const ayahs = await content.getSurah(70, 'en');
+
+    // ۞ إِنَّ ٱلۡإِنسَٰنَ خُلِقَ هَلُوعًا ﰒ
+    expect(ayahs.map((a) => a.ayah)).toEqual([19]);
+    expect(nfc(ayahs[0].words).map((w) => w.text)).toEqual(
+      ['إِنَّ', 'ٱلۡإِنسَٰنَ', 'خُلِقَ', 'هَلُوعًا'].map((t) => t.normalize('NFC')),
+    );
+  });
+
+  it('keeps pause marks on the word as KFGQPC writes them, with a bare form without them', async () => {
+    const content = build();
+
+    const [ayah] = (await content.getSurah(2, 'en')).filter((a) => a.ayah === 2);
+
+    // ذَٰلِكَ ٱلۡكِتَٰبُ لَا رَيۡبَۛ فِيهِۛ ...: the muʿānaqa marks ۛ sit on words 4 and 5.
+    const [, , , rayba, fihi] = nfc(ayah.words);
+    expect(rayba.text).toBe('رَيۡبَۛ'.normalize('NFC'));
+    expect(rayba.bare.normalize('NFC')).toBe('رَيۡبَ'.normalize('NFC'));
+    expect(fihi.bare.normalize('NFC')).toBe('فِيهِ'.normalize('NFC'));
+    expect(ayah.words[0].bare).toBe(ayah.words[0].text);
+  });
+
+  it('shows two text tokens as one word where the corpus counts one (بَعۡدَ مَا in 2:181)', async () => {
+    const content = build();
+
+    const [ayah] = (await content.getSurah(2, 'en')).filter((a) => a.ayah === 181);
+    const word = await content.getWordDetails({ surah: 2, ayah: 181, word: 3 }, 'en');
+
+    expect(ayah.words).toHaveLength(13);
+    expect(word.text.normalize('NFC')).toBe('بَعۡدَ مَا'.normalize('NFC'));
+    expect(word.gloss).toBe('after what');
+    expect(nfc(word.segments).map((s) => s.text)).toEqual(
+      ['بَعْدَ', 'مَا'].map((t) => t.normalize('NFC')),
+    );
+    // The words after it keep their own glosses.
+    expect(ayah.words[3].gloss).toBe('he (has) heard [it]');
+    expect(ayah.words[12].gloss).toBe('All-Knowing');
+  });
+
+  it('shows one text token covering two corpus words with the segments of both (لَّوۡمَا in 15:7)', async () => {
+    const content = build();
+
+    const [ayah] = await content.getSurah(15, 'en');
+    const word = await content.getWordDetails({ surah: 15, ayah: 7, word: 1 }, 'en');
+
+    expect(ayah.words).toHaveLength(7);
+    expect(word.gloss).toBe('Why not');
+    expect(nfc(word.segments).map((s) => s.text)).toEqual(
+      ['لَّوْ', 'مَا'].map((t) => t.normalize('NFC')),
+    );
+    expect(word.segments.map((s) => s.position)).toEqual([1, 2]);
+    expect(word.segments[1].terms.map((t) => t.key)).toEqual(['particle.negative']);
+    expect(ayah.words[1].gloss).toBe('you bring to us');
+  });
+
+  it('lists the surahs with their names, ayah counts and whether a Basmala heads them', async () => {
+    const content = build();
+
+    const surahs = await content.listSurahs();
+
+    expect(surahs.map((s) => s.surah)).toEqual([1, 2, 9, 15, 70]);
+    expect(surahs[0]).toEqual({
+      surah: 1,
+      nameEnglish: 'Al-Fātiḥah',
+      nameArabic: 'الفَاتِحة',
+      ayahCount: 7,
+      // In Al-Fatiha the Basmala is ayah 1, not a header.
+      hasBasmala: false,
+    });
+    expect(surahs.map((s) => s.hasBasmala)).toEqual([false, true, false, true, true]);
+  });
+
+  it('gives the Basmala header the words of 1:1, linked to their details there', async () => {
+    const content = build();
+
+    const basmala = await content.getBasmala('en');
+
+    expect(basmala.map((w) => w.ref)).toEqual(
+      [1, 2, 3, 4].map((word) => ({ surah: 1, ayah: 1, word })),
+    );
+    expect(basmala[0].gloss).toBe('In (the) name');
+  });
+
+  it('counts how often each lemma occurs', async () => {
+    const content = build();
+
+    // رَحِيم occurs twice in the sample: 1:1 and 1:3.
+    const word = await content.getWordDetails({ surah: 1, ayah: 1, word: 4 }, 'en');
+    const stem = word.segments[1];
+
+    expect(stem.root).toBe('رحم');
+    expect(stem.lemmaFrequency).toBe(2);
+  });
+
   it('splits a word into its segments, each with its grammatical terms', async () => {
-    const content = build({ surahs: [1, 2] });
+    const content = build();
 
     // وَبِٱلْـَٔاخِرَةِ "and in the Hereafter" = وَ + بِ + ٱلْ + ءَاخِرَةِ
     const word = await content.getWordDetails({ surah: 2, ayah: 4, word: 10 }, 'en');
@@ -200,28 +308,35 @@ describe('content build', () => {
   });
 
   it('refuses to build when the text and morphology disagree on word count', () => {
-    const morphologyMissingAWord = sources()
-      .morphologyText.split('\n')
-      .filter((line) => !line.startsWith('1:4:3:'))
-      .join('\n');
-
-    expect(() => build({ morphologyText: morphologyMissingAWord })).toThrow(
+    expect(() => build({ morphologyText: withoutMorphologyFor('1:4:3:') })).toThrow(
       'Word count mismatch in 1:4',
     );
   });
 
+  it('refuses a mismatch the word alignment table does not explain', () => {
+    expect(() => build({ alignment: {} })).toThrow('Word count mismatch in 2:181');
+  });
+
+  it('refuses an alignment entry that no longer fits the text', () => {
+    expect(() =>
+      build({ alignment: { '1:2': [{ tokens: [1, 2], words: [1, 1], glosses: [1, 1] }] } }),
+    ).toThrow('Word alignment for 1:2');
+  });
+
+  it('refuses morphology for an ayah the text does not have', () => {
+    const extra = `${sources().morphologyText}\n3:1:1:1\tالٓمٓ\tP\tINL|LEM:الم`;
+
+    expect(() => build({ morphologyText: extra })).toThrow('Morphology has words for 3:1');
+  });
+
   it('leaves the previous database untouched when a build fails', async () => {
     const outFile = join(dir, 'content.db');
-    const options = { ...sources(), surahs: [1], contentVersion: 1, outFile };
+    const options = { ...sources(), contentVersion: 1, outFile };
     buildContentDatabase(options);
-    const brokenMorphology = sources()
-      .morphologyText.split('\n')
-      .filter((line) => !line.startsWith('1:4:3:'))
-      .join('\n');
 
-    expect(() => buildContentDatabase({ ...options, morphologyText: brokenMorphology })).toThrow(
-      'Word count mismatch',
-    );
+    expect(() =>
+      buildContentDatabase({ ...options, morphologyText: withoutMorphologyFor('1:4:3:') }),
+    ).toThrow('Word count mismatch');
 
     const content = createContentRepository(openSqlRunnerTracked(join(dir, 'content.db')));
     expect(await content.getSurah(1, 'en')).toHaveLength(7);
@@ -246,10 +361,10 @@ describe('content build', () => {
   });
 
   it('keeps translation and tafsir verbatim, including the tafsir’s ayah-number prefix', async () => {
-    const content = build({ surahs: [1, 2] });
+    const content = build();
 
     const [opening] = await content.getTranslations(1, 'en');
-    const [ayah4] = await content.getTranslations(2, 'en');
+    const [ayah4] = (await content.getTranslations(2, 'en')).filter((a) => a.ayah === 4);
 
     expect(opening).toMatchObject({
       translation: 'In the name of Allah, the Most Compassionate, the Most Merciful.',

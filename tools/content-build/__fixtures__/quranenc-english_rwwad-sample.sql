@@ -1,4 +1,4 @@
--- Extract of QuranEnc english_rwwad.sqlite v1.0.21 (Al-Fatiha and 2:4), rows unmodified.
+-- Extract of QuranEnc english_rwwad.sqlite v1.0.21 (Al-Fatiha, 2:1, 2:2, 2:4, 2:181, 9:1, 15:7, 70:19), rows unmodified.
 CREATE TABLE "translations" (
 	"id"	INTEGER NOT NULL,
 	"sura"	INTEGER,
@@ -18,4 +18,10 @@ INSERT INTO translations VALUES (6, 1, 6, 'Guide us to the straight path,', '');
 INSERT INTO translations VALUES (7, 1, 7, 'the path of those whom You have blessed[6]; not of those who incurred Your Wrath[7], or of those who went astray[8].', '[6] The way of the Prophets and those who follow them.
  [7] Those who know the Truth and do not follow it, like the Jews.
  [8] Those who are ignorant of the Truth and follow misguidance, like the Christians.');
+INSERT INTO translations VALUES (8, 2, 1, 'Alif Lām Mīm[1].', '[1] Allah knows the meaning of these disjointed Arabic letters. This bears testimony to the inimitable nature of the Qur’an and its divine source.');
+INSERT INTO translations VALUES (9, 2, 2, 'This is the Book about which there is no doubt, a guidance for the righteous[2],', '[2] Literally, "those who have taqwā," i.e., who have piety, righteousness, fear and love of Allah, and who take great care of avoiding His displeasure.');
 INSERT INTO translations VALUES (11, 2, 4, 'and those who believe in what has been sent down to you [O Prophet] and in what was sent down before you[5], and in the Hereafter they believe with certainty.', '[5] i.e., the Taurāt (Torah) and the Injīl (Gospel), etc.');
+INSERT INTO translations VALUES (188, 2, 181, 'If someone alters the bequest[79] after hearing it, they will bear the sin of the alteration, for Allah is All-Hearing, All-Knowing.', '[79] i.e., the will of the deceased.');
+INSERT INTO translations VALUES (1236, 9, 1, '[This is] a declaration of disassociation[1] by Allah and His Messenger to those polytheists with whom you have made a treaty.', '[1] This surah, unlike all surahs of the Qur’an, is not preceded by al-basmalah (the usual opening statement).');
+INSERT INTO translations VALUES (1809, 15, 7, 'Why do you not bring us the angels, if you are truthful?”', '');
+INSERT INTO translations VALUES (5394, 70, 19, 'Indeed, man was created impatient:', '');

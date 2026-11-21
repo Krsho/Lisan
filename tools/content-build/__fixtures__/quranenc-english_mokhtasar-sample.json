@@ -57,11 +57,59 @@
       "footnotes": null
     },
     {
+      "id": "8",
+      "sura": "2",
+      "aya": "1",
+      "arabic_text": "الٓمٓ",
+      "translation": "1. Alif Lām Mīm – letters like these begin certain sūrahs of the Qur’ān. Although they have no meaning in themselves, they do however have a purpose. Since there is divine wisdom contained in everything in the Qur’ān, these letters point to the miracle of the Qur’ān, made up of the letters which make up the words we speak. Therefore, when sūrahs begin with letters in this way, they are usually followed with a verse about the Qur’ān, as we see in this sūrah.",
+      "footnotes": null
+    },
+    {
+      "id": "9",
+      "sura": "2",
+      "aya": "2",
+      "arabic_text": "ذَٰلِكَ ٱلۡكِتَٰبُ لَا رَيۡبَۛ فِيهِۛ هُدٗى لِّلۡمُتَّقِينَ",
+      "translation": "2. This is the Qur’ān, in which there is nothing of any doubt, neither in terms of its origin, nor in terms of its meaning. It is the word of Allah, guiding those who are mindful of Allah to the way that leads to Him.",
+      "footnotes": null
+    },
+    {
       "id": "11",
       "sura": "2",
       "aya": "4",
       "arabic_text": "وَٱلَّذِينَ يُؤۡمِنُونَ بِمَآ أُنزِلَ إِلَيۡكَ وَمَآ أُنزِلَ مِن قَبۡلِكَ وَبِٱلۡأٓخِرَةِ هُمۡ يُوقِنُونَ",
       "translation": "4. They believe in the revelation that Allah sent down to you, O Prophet, and in that which He revealed to all the other prophets before you (peace be upon them), without distinction; and they have a definite belief in the Afterlife, with its rewards and punishments.",
+      "footnotes": null
+    },
+    {
+      "id": "188",
+      "sura": "2",
+      "aya": "181",
+      "arabic_text": "فَمَنۢ بَدَّلَهُۥ بَعۡدَ مَا سَمِعَهُۥ فَإِنَّمَآ إِثۡمُهُۥ عَلَى ٱلَّذِينَ يُبَدِّلُونَهُۥٓۚ إِنَّ ٱللَّهَ سَمِيعٌ عَلِيمٞ",
+      "translation": "181. Whoever then changes the will, adding to it or taking away from it or stopping something when they know what the will contains, the sin of it will be upon those who changed it, and the person who wrote the will is not held responsible for what they did. Allah hears all that His creation say, and knows all that they do; and He knows every detail of the situations they are in.",
+      "footnotes": null
+    },
+    {
+      "id": "1236",
+      "sura": "9",
+      "aya": "1",
+      "arabic_text": "بَرَآءَةٞ مِّنَ ٱللَّهِ وَرَسُولِهِۦٓ إِلَى ٱلَّذِينَ عَٰهَدتُّم مِّنَ ٱلۡمُشۡرِكِينَ",
+      "translation": "1. This is a declaration of dissociation from Allah and His Messenger and an announcement of the termination of the treaties that you, O Muslims, had made with the idolaters.",
+      "footnotes": null
+    },
+    {
+      "id": "1809",
+      "sura": "15",
+      "aya": "7",
+      "arabic_text": "لَّوۡمَا تَأۡتِينَا بِٱلۡمَلَٰٓئِكَةِ إِن كُنتَ مِنَ ٱلصَّٰدِقِينَ",
+      "translation": "7. Why do you not call forth the angels to testify on your behalf, or why do you not ask for us to be destroyed because of our disbelief?",
+      "footnotes": null
+    },
+    {
+      "id": "5394",
+      "sura": "70",
+      "aya": "19",
+      "arabic_text": "۞ إِنَّ ٱلۡإِنسَٰنَ خُلِقَ هَلُوعًا",
+      "translation": "19. Indeed, man has been created extremely greedy.",
       "footnotes": null
     }
   ]
