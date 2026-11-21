@@ -17,21 +17,19 @@ type EventRow = {
   utc_offset_minutes: number | null;
 };
 
-const KINDS = new Set<string>([
-  'learn',
-  'known',
-  'known-undone',
-  'added',
-  'completed',
-  'start',
-  'review',
-]);
+/** Kinds whose events are about a lemma; the others (completed, start) have none. */
+const LEMMA_KINDS = new Set<string>(['learn', 'known', 'known-undone', 'added', 'review']);
+const KINDS = new Set<string>([...LEMMA_KINDS, 'completed', 'start']);
 const RATINGS = new Set([1, 2, 3, 4]);
 
-function toEvent(row: EventRow): ReviewEvent | null {
-  // Kinds from a newer app version (synced from another device) are kept in the table but left out.
-  if (!KINDS.has(row.kind) || row.surah === null || row.ayah === null || row.word === null)
-    return null;
+/**
+ * The event a row holds; 'unknown' for a kind from a newer app version (synced from another
+ * device), kept in the table but left out; 'invalid' for a row not valid for its kind.
+ */
+function toEvent(row: EventRow): ReviewEvent | 'unknown' | 'invalid' {
+  if (!KINDS.has(row.kind)) return 'unknown';
+  if (row.surah === null || row.ayah === null || row.word === null) return 'invalid';
+  if (LEMMA_KINDS.has(row.kind) !== (row.lemma_id !== null)) return 'invalid';
   const base = {
     id: row.id,
     lemmaId: row.lemma_id,
@@ -41,7 +39,7 @@ function toEvent(row: EventRow): ReviewEvent | null {
     ...(row.utc_offset_minutes === null ? {} : { utcOffsetMinutes: row.utc_offset_minutes }),
   };
   if (row.kind === 'review') {
-    if (row.rating === null || !RATINGS.has(row.rating) || row.correct === null) return null;
+    if (row.rating === null || !RATINGS.has(row.rating) || row.correct === null) return 'invalid';
     return {
       ...base,
       kind: 'review',
@@ -131,7 +129,16 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
            FROM review_events ORDER BY timestamp, id`,
         [],
       );
-      return rows.map(toEvent).filter((e): e is ReviewEvent => e !== null);
+      const events: ReviewEvent[] = [];
+      let invalid = 0;
+      for (const row of rows) {
+        const event = toEvent(row);
+        if (event === 'invalid') invalid++;
+        else if (event !== 'unknown') events.push(event);
+      }
+      // Left out rather than failing the whole log; kept in the table for a later fix.
+      if (invalid > 0) console.warn(`Left out ${invalid} invalid events from the log`);
+      return events;
     },
 
     /** Every stored setting, as written by saveSettings. */

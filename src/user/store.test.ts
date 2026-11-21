@@ -163,6 +163,30 @@ describe('user store', () => {
     });
   });
 
+  it('leaves out stored events that are not valid for their kind', async () => {
+    const store = await openStore();
+    const insert = (id: string, kind: string, lemma: string | null, rating: number | null = null) =>
+      db.run(
+        `INSERT INTO review_events
+           (id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms, timestamp,
+            device_id)
+         VALUES (?, ?, ?, 1, 1, 4, ?, ?, 100, 5, 'device-b')`,
+        [id, kind, lemma, rating, rating === null ? null : 1],
+      );
+    await insert('learn-without-lemma', 'learn', null);
+    await insert('known-without-lemma', 'known', null);
+    await insert('review-without-lemma', 'review', null, 3);
+    await insert('completed-with-lemma', 'completed', 'رَحِيم');
+    await insert('good', 'learn', 'رَحِيم');
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const events = await store.listEvents();
+
+    expect(events.map((e) => e.id)).toEqual(['good']);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('4'));
+    warn.mockRestore();
+  });
+
   it('records a chosen start point on the path', async () => {
     const store = await openStore();
     const nas = { surah: 114, ayah: 1, word: 1 };
