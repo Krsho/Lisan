@@ -19,6 +19,10 @@ Bump `CONTENT_VERSION` in `src/content/version.ts` whenever the generated databa
 
 To get the QUL file: sign in at [qul.tarteel.ai](https://qul.tarteel.ai), open the [English Word by Word Translation](https://qul.tarteel.ai/resources/translation/92) resource, choose **Download json**, and save it as `content/sources/qul-english-word-by-word.json`.
 
+## Glossary
+
+`content/glossary.json` is authored for Lisan (not third-party): every grammatical term the word details use, keyed by a stable term id, with its Arabic name and, per explanation language, a name and short definition. The content build maps each corpus morphology tag to a term and refuses to build if a tag is unknown or a term has no entry. To add a language, add its key (e.g. `"bs"`) to each term; missing translations fall back to English.
+
 ## Fonts
 
 Quran text is rendered with **KFGQPC Uthmanic Script Hafs v9** (`assets/fonts/UthmanicHafs-v9.otf`). Its license forbids reproduction without the written approval of the King Fahd Glorious Quran Printing Complex, so the file is **not committed**: `npm run content:fetch` downloads a checksum-verified copy (the official download is no longer available; the source is a pinned commit of the [quranwbw/qpc-fonts](https://github.com/quranwbw/qpc-fonts) mirror). Commit it only once KFGQPC grants permission. If permission is refused, fall back to Amiri Quran (SIL OFL).

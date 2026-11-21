@@ -94,9 +94,12 @@ describe('content build', () => {
       { text: 'ٱلْ', terms: ['role.prefix', 'particle.definite-article'] },
       {
         text: 'ءَاخِرَةِ',
-        terms: ['pos.noun', 'gender.feminine', 'number.singular', 'case.genitive'],
+        terms: ['role.stem', 'pos.noun', 'gender.feminine', 'number.singular', 'case.genitive'],
       },
     ]);
+    // Prefixes have a dictionary form but no root; the stem has both.
+    expect(word.segments.slice(0, 3).map((s) => s.root)).toEqual([null, null, null]);
+    expect(word.segments[3].root).toBe('أخر');
   });
 
   it('links each stem to its lemma and root', async () => {

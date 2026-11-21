@@ -49,6 +49,13 @@ type WordRow = { ayah: number; position: number; text: string; gloss: string | n
 type SegmentRow = { position: number; text: string; lemma: string | null; root: string | null };
 type TermRow = Term & { segment: number };
 
+// A term's name and definition in the requested language, falling back to English.
+// The joins expect the terms table as `t` and take the language as their one parameter.
+const TERM_COLUMNS = `COALESCE(tl.name, en.name) AS name, COALESCE(tl.definition, en.definition) AS definition`;
+const TERM_TRANSLATION_JOINS = `
+  LEFT JOIN term_translations tl ON tl.term = t.term AND tl.language = ?
+  LEFT JOIN term_translations en ON en.term = t.term AND en.language = 'en'`;
+
 export function createContentRepository(db: SqlRunner) {
   return {
     async getSurah(surah: number, language: Language): Promise<Ayah[]> {
@@ -75,12 +82,8 @@ export function createContentRepository(db: SqlRunner) {
 
     async getTerm(key: string, language: Language): Promise<Term> {
       const [term] = await db.all<Term>(
-        `SELECT t.term AS key, t.arabic,
-                COALESCE(tl.name, en.name) AS name,
-                COALESCE(tl.definition, en.definition) AS definition
-           FROM terms t
-           LEFT JOIN term_translations tl ON tl.term = t.term AND tl.language = ?
-           LEFT JOIN term_translations en ON en.term = t.term AND en.language = 'en'
+        `SELECT t.term AS key, t.arabic, ${TERM_COLUMNS}
+           FROM terms t ${TERM_TRANSLATION_JOINS}
           WHERE t.term = ?`,
         [language, key],
       );
@@ -108,13 +111,9 @@ export function createContentRepository(db: SqlRunner) {
       );
       // Falls back to English where a term has no translation in the requested language.
       const termRows = await db.all<TermRow>(
-        `SELECT st.segment, st.term AS key, t.arabic,
-                COALESCE(tl.name, en.name) AS name,
-                COALESCE(tl.definition, en.definition) AS definition
+        `SELECT st.segment, st.term AS key, t.arabic, ${TERM_COLUMNS}
            FROM segment_terms st
-           JOIN terms t ON t.term = st.term
-           LEFT JOIN term_translations tl ON tl.term = st.term AND tl.language = ?
-           LEFT JOIN term_translations en ON en.term = st.term AND en.language = 'en'
+           JOIN terms t ON t.term = st.term ${TERM_TRANSLATION_JOINS}
           WHERE st.surah = ? AND st.ayah = ? AND st.word = ?
           ORDER BY st.segment, st.ordinal`,
         [language, surah, ayah, word],

@@ -100,7 +100,11 @@ const NUMBER: Record<string, string> = {
 };
 const PERSON_GENDER_NUMBER = /^([123])?([MF])?([SDP])?$/;
 
-export function describeSegment(segment: Segment): SegmentDescription {
+/**
+ * Describes one segment. `inMultiSegmentWord` labels the non-affix segment of a word that has
+ * prefixes or suffixes as its stem (a word that is only a stem needs no role label).
+ */
+export function describeSegment(segment: Segment, inMultiSegmentWord: boolean): SegmentDescription {
   const { pos, tags } = segment;
   const location = `${segment.surah}:${segment.ayah}:${segment.word}:${segment.position}`;
   let lemma: string | null = null;
@@ -129,9 +133,14 @@ export function describeSegment(segment: Segment): SegmentDescription {
     }
   }
 
+  if (roleTerms.length === 0 && inMultiSegmentWord) roleTerms.push('role.stem');
   if (kindTerms.length === 0) {
     if (pos === 'N') kindTerms.push('pos.noun');
     else if (pos === 'V') kindTerms.push('pos.verb');
   }
-  return { lemma, root, terms: [...roleTerms, ...kindTerms, ...featureTerms] };
+  // EMPH marks both the emphatic lām prefix (لَ) and the emphatic nūn suffix (نَّ).
+  const kinds = roleTerms.includes('role.suffix')
+    ? kindTerms.map((t) => (t === 'particle.emphatic' ? 'particle.emphatic-nun' : t))
+    : kindTerms;
+  return { lemma, root, terms: [...roleTerms, ...kinds, ...featureTerms] };
 }

@@ -16,6 +16,9 @@ import { QURAN_FONT_FAMILY } from '../theme/quranFont';
 
 type Props = { wordRef: WordRef | null; onClose: () => void };
 
+/** Glossary entries for the root and lemma labels shown on every stem. */
+type Concepts = { root: Term; lemma: Term };
+
 /** Bottom sheet explaining one word: its segments, lemma, root and grammatical terms. */
 export function WordDetailSheet({ wordRef, onClose }: Props) {
   const colors = useColors();
@@ -45,7 +48,7 @@ export function WordDetailSheet({ wordRef, onClose }: Props) {
 function WordDetailContent({ wordRef, colors }: { wordRef: WordRef; colors: Colors }) {
   const content = useContent();
   const [details, setDetails] = useState<WordDetails | null>(null);
-  const [concepts, setConcepts] = useState<{ root: Term; lemma: Term } | null>(null);
+  const [concepts, setConcepts] = useState<Concepts | null>(null);
   const [failed, setFailed] = useState(false);
   const [openTerm, setOpenTerm] = useState<string | null>(null);
 
@@ -105,7 +108,7 @@ function WordDetailContent({ wordRef, colors }: { wordRef: WordRef; colors: Colo
 
 type SegmentCardProps = {
   segment: Segment;
-  concepts: { root: Term; lemma: Term };
+  concepts: Concepts;
   colors: Colors;
   openTerm: string | null;
   onToggleTerm: (id: string) => void;

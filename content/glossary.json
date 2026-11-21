@@ -7,7 +7,7 @@
     }
   },
   "concept.lemma": {
-    "ar": "أصل الكلمة",
+    "ar": "الصيغة المعجمية",
     "en": {
       "name": "lemma",
       "definition": "The dictionary form of a word: the basic form you would look up, before prefixes, suffixes and endings are added."
@@ -25,6 +25,13 @@
     "en": {
       "name": "suffix",
       "definition": "A letter or short form joined to the end of a word, most often an attached pronoun such as هُمْ (them) or نَا (us)."
+    }
+  },
+  "role.stem": {
+    "ar": "أصل الكلمة",
+    "en": {
+      "name": "stem",
+      "definition": "The core of the word, which carries its main meaning, once prefixes and suffixes are taken off."
     }
   },
   "pos.noun": {
@@ -160,6 +167,13 @@
       "definition": "The prefix لَ used to emphasise a statement (surely, indeed)."
     }
   },
+  "particle.emphatic-nun": {
+    "ar": "نون التوكيد",
+    "en": {
+      "name": "emphatic nūn",
+      "definition": "The ending نَّ or نْ on an imperfect or imperative verb, adding strong emphasis (surely, certainly)."
+    }
+  },
   "particle.imperative-lam": {
     "ar": "لام الأمر",
     "en": {
@@ -199,7 +213,7 @@
     "ar": "حرف تحقيق",
     "en": {
       "name": "particle of certainty",
-      "definition": "The particle قَدْ before a perfect verb, meaning that something has certainly happened."
+      "definition": "A particle, usually قَدْ before a perfect verb, stressing that something has certainly happened. A lightened إِنْ is sometimes used the same way."
     }
   },
   "particle.restriction": {
@@ -269,7 +283,7 @@
     "ar": "حرف ابتداء",
     "en": {
       "name": "inceptive particle",
-      "definition": "A particle such as حَتَّىٰ or أَلَا that begins a new clause."
+      "definition": "A particle such as حَتَّىٰ or بَلْ that begins a new clause."
     }
   },
   "particle.interpretation": {
@@ -367,7 +381,7 @@
     "ar": "حروف مقطعة",
     "en": {
       "name": "disconnected letters",
-      "definition": "Letters at the start of some surahs, such as الٓمٓ, read letter by letter. Their meaning is known only to Allah."
+      "definition": "Letters at the start of some surahs, such as الٓمٓ, read letter by letter. Scholars differ on their meaning."
     }
   },
   "derivation.active-participle": {
@@ -455,21 +469,21 @@
     }
   },
   "mood.indicative": {
-    "ar": "مرفوع",
+    "ar": "مضارع مرفوع",
     "en": {
       "name": "indicative mood",
       "definition": "The ordinary mood of an imperfect verb for statements, typically ending in ـُ or ـونَ."
     }
   },
   "mood.subjunctive": {
-    "ar": "منصوب",
+    "ar": "مضارع منصوب",
     "en": {
       "name": "subjunctive mood",
       "definition": "The mood of an imperfect verb after particles such as أَنْ and لَنْ, typically ending in ـَ or losing its final نَ."
     }
   },
   "mood.jussive": {
-    "ar": "مجزوم",
+    "ar": "مضارع مجزوم",
     "en": {
       "name": "jussive mood",
       "definition": "The mood of an imperfect verb after لَمْ, in prohibitions and in conditions, typically ending in sukūn or losing its final نَ."

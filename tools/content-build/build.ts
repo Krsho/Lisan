@@ -100,7 +100,8 @@ export function buildContentDatabase(options: BuildOptions): void {
       insertAyah.run(surah, ayah, text);
       words.forEach((word, i) => insertWord.run(surah, ayah, i + 1, word));
       for (const s of ayahSegments) {
-        const { lemma, root, terms } = describeSegment(s);
+        const inMultiSegmentWord = ayahSegments.some((o) => o.word === s.word && o !== s);
+        const { lemma, root, terms } = describeSegment(s, inMultiSegmentWord);
         insertSegment.run(s.surah, s.ayah, s.word, s.position, s.text, lemma, root);
         terms.forEach((term, i) => {
           usedTerms.add(term);
