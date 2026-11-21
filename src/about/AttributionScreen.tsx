@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { audioSource } from '../audio/source';
 import { useContent } from '../content/ContentProvider';
 import type { Edition } from '../content/repository';
 import { useColors, type Colors } from '../theme/colors';
@@ -31,11 +32,14 @@ const CREDITS_BEFORE_EDITIONS: Credit[] = [
 ];
 
 const CREDITS_AFTER_EDITIONS: Credit[] = [
-  { name: 'Quran Foundation', role: 'Quran data and APIs', url: 'https://quran.foundation' },
   {
-    name: 'Reciters',
-    role: 'Recitation audio',
-    detail: 'Reciters will be credited here when recitation audio is added.',
+    name: audioSource.provider.name,
+    role: 'Recitation audio, streamed per ayah or downloaded at your request',
+    url: audioSource.provider.url,
+  },
+  {
+    name: `Reciter: ${audioSource.reciter.name}`,
+    role: `Recitation (${audioSource.reciter.style}), from ${audioSource.provider.name}`,
   },
 ];
 

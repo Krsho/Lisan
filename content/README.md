@@ -39,6 +39,16 @@ Both are stored and shown exactly as QuranEnc publishes them, keyed by language 
 
 The attribution screen reads each edition's title, link and version from the database.
 
+## Recitation audio
+
+Recitation is **not bundled** and not in the content database. The app streams each ayah from [Quran Foundation](https://quran.foundation)'s public audio files (`https://verses.quran.foundation/Alafasy/mp3/SSSAAA.mp3`, Mishary Rashid Alafasy, QF recitation 7), with no API credentials. Only `src/audio/source.ts` knows these URLs, so the source can be switched to the official Content API (which needs a backend to hold the client secret) without touching playback or downloads.
+
+Under the [QF developer terms](https://api-docs.quran.foundation/legal/developer-terms/) this audio is QF content whether or not it comes through the API:
+
+- QF and the reciter are credited near the player and on the attribution screen.
+- Nothing is rehosted or cached by the app. Audio is kept only when the user downloads a surah for offline use, in app-private storage (`Paths.document/audio/<reciter>/`), and deleted when they remove it.
+- **QF must confirm before release that streaming its audio files directly, rather than through its approved API endpoints, is acceptable (#21).** Contact developers@quran.com.
+
 ## Glossary
 
 `content/glossary.json` is authored for Lisan (not third-party): every grammatical term the word details use, keyed by a stable term id, with its Arabic name and, per explanation language, a name and short definition. The content build maps each corpus morphology tag to a term and refuses to build if a tag is unknown or a term has no entry. To add a language, add its key (e.g. `"bs"`) to each term; missing translations fall back to English.
