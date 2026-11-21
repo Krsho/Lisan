@@ -1,0 +1,36 @@
+{
+  "language": "en",
+  "surah": 1,
+  "notes": [
+    {
+      "ayah": 2,
+      "text": "ٱلۡحَمۡدُ is a nominative noun: it is the subject of a nominal sentence whose predicate is لِلَّهِ.",
+      "status": "approved",
+      "reviewer": "krsho",
+      "draftedBy": "claude-opus-5-5"
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "text": "The prefix لِ is a preposition, so ٱللَّهِ after it is genitive.",
+      "status": "approved",
+      "reviewer": "krsho",
+      "draftedBy": null
+    },
+    {
+      "ayah": 2,
+      "word": 3,
+      "text": "A draft that nobody has reviewed yet.",
+      "status": "draft",
+      "reviewer": null,
+      "draftedBy": "claude-opus-5-5"
+    },
+    {
+      "ayah": 4,
+      "text": "A note the reviewer turned down.",
+      "status": "rejected",
+      "reviewer": "krsho",
+      "draftedBy": "claude-opus-5-5"
+    }
+  ]
+}

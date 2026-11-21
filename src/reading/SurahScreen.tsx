@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AyahPlayButton, RecitationBar } from '../audio/RecitationControls';
@@ -16,6 +16,7 @@ import type {
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { AyahTranslation } from './AyahTranslation';
+import { LinguisticNotes, notesFor, useLinguisticNotes } from './LinguisticNotes';
 import { WordDetailSheet } from './WordDetailSheet';
 
 const toArabicDigits = (n: number) =>
@@ -44,6 +45,8 @@ export function SurahScreen({ summary, initialAyah }: Props) {
   const list = useRef<FlatList<Ayah>>(null);
   const playback = useAyahPlayback(audioSource);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
+  const notes = useLinguisticNotes([surah], 'en');
+  const listExtraData = useMemo(() => ({ playback, notes }), [playback, notes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,8 +90,8 @@ export function SurahScreen({ summary, initialAyah }: Props) {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         data={loaded.ayahs}
-        // Redraw the play buttons when playback changes.
-        extraData={playback}
+        // Redraw the play buttons when playback changes, and the ayahs once their notes load.
+        extraData={listExtraData}
         keyExtractor={(ayah) => String(ayah.ayah)}
         initialNumToRender={Math.max(8, initialIndex + 4)}
         onLayout={() => {
@@ -124,6 +127,7 @@ export function SurahScreen({ summary, initialAyah }: Props) {
                 }
               />
               {translation ? <AyahTranslation data={translation} /> : null}
+              <LinguisticNotes notes={notesFor(notes, surah, ayah.ayah)} words={ayah.words} />
             </View>
           );
         }}

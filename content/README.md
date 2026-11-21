@@ -84,6 +84,50 @@ Under the [QF developer terms](https://api-docs.quran.foundation/legal/developer
 
 `content/glossary.json` is authored for Lisan (not third-party): every grammatical term the word details use, keyed by a stable term id, with its Arabic name and, per explanation language, a name and short definition. The content build maps each corpus morphology tag to a term and refuses to build if a tag is unknown or a term has no entry. To add a language, add its key (e.g. `"bs"`) to each term; missing translations fall back to English.
 
+## Linguistic notes
+
+Short grammar notes on path ayahs (what a particle does here, why a word is genitive), authored for Lisan and shown under an ayah labelled "Linguistic note", apart from the tafsir. They are **strictly linguistic: never religious interpretation**, which is the tafsir's job. Claude drafts them; a maintainer reviews every one, and **only approved notes are built into the content database**.
+
+They live in `content/notes/<language>/<surah>.json`, one file per explanation language and surah:
+
+```json
+{
+  "language": "en",
+  "surah": 1,
+  "notes": [
+    {
+      "ayah": 2,
+      "text": "ٱلۡحَمۡدُ is nominative: it is the subject of a nominal sentence.",
+      "status": "approved",
+      "reviewer": "krsho",
+      "draftedBy": "claude-opus-5-5"
+    },
+    {
+      "ayah": 2,
+      "word": 2,
+      "text": "The prefix لِ is a preposition, so ٱللَّهِ after it is genitive.",
+      "status": "draft",
+      "reviewer": null,
+      "draftedBy": "claude-opus-5-5"
+    }
+  ]
+}
+```
+
+- A note without `word` is on the whole ayah; `word` is the displayed word position (as in the word-by-word view). One note at most per ayah and per word.
+- `status` is `draft`, `approved` or `rejected`. An approved or rejected note needs a `reviewer`. `draftedBy` is the model that drafted it, or `null` for a note a person wrote.
+- The content build checks every note, in any status, against the text (the ayah and word must exist), then stores the approved ones in the `notes` table.
+
+### Drafting and reviewing (human step)
+
+1. Build the content database first (`npm run content:build`): the drafts are grounded in its morphology.
+2. Check the prompt without calling the API: `npm run notes:draft -- --dry-run --surah 1`.
+3. Draft, with an Anthropic API key in `ANTHROPIC_API_KEY` (the key is only read from the environment; never commit it): `npm run notes:draft -- --surah 1`. Options: `--limit N` (at most N ayahs), `--surah N`, `--redraft`, `--language en`, `--model <id>` (default `claude-opus-5-5`). It drafts the curriculum path ayahs, in path order, that have no notes yet, and writes each surah's file after every ayah, so an interrupted run keeps its work. `--redraft` replaces an ayah's earlier drafts too; **it never changes an approved or rejected note**, and drops a new draft on an ayah or word that already has one.
+4. Review the drafts in the JSON files, against the morphology shown in the app's word details. For each note: fix the wording if needed, then set `status` to `approved` or `rejected` and `reviewer` to your name. Reject anything that interprets rather than explains grammar, and anything you are not sure is correct. Keep rejected notes in the file (so a redraft does not propose them again) or delete them.
+5. Commit the notes, bump `CONTENT_VERSION`, run `npm run content:build` and `npm run check`, and merge. To ship them to installed apps without a store release, follow "Releasing a content update" above.
+
+The drafting prompt is in `tools/content-build/draft-notes.ts`. Drafts are AI-generated text: only reviewed, approved notes ever reach users.
+
 ## Fonts
 
 Quran text is rendered with **KFGQPC Uthmanic Script Hafs v9** (`assets/fonts/UthmanicHafs-v9.otf`). Its license forbids reproduction without the written approval of the King Fahd Glorious Quran Printing Complex, so the file is **not committed**: `npm run content:fetch` downloads a checksum-verified copy (the official download is no longer available; the source is a pinned commit of the [quranwbw/qpc-fonts](https://github.com/quranwbw/qpc-fonts) mirror). Commit it only once KFGQPC grants permission. If permission is refused, fall back to Amiri Quran (SIL OFL).

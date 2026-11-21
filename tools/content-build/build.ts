@@ -6,6 +6,7 @@ import { describeSegment } from './features.ts';
 import { translationsOf, type Glossary } from './glossary.ts';
 import { bareWord, parseKfgqpc, splitWords } from './kfgqpc.ts';
 import { parseMorphology, type Segment } from './morphology.ts';
+import type { NotesFile } from './notes.ts';
 import { pathOrder } from './path.ts';
 import type { QuranEncEdition } from './quranenc.ts';
 
@@ -26,6 +27,8 @@ export type BuildOptions = {
   translations: Record<string, QuranEncEdition>;
   /** Short tafsir per language code (QuranEnc). */
   tafsirs: Record<string, QuranEncEdition>;
+  /** Authored linguistic notes (content/notes/), in every review status; only approved ones ship. */
+  notes: NotesFile[];
   contentVersion: number;
   outFile: string;
 };
@@ -82,6 +85,13 @@ const SCHEMA = `
     position INTEGER PRIMARY KEY, surah INTEGER NOT NULL, ayah INTEGER NOT NULL,
     UNIQUE (surah, ayah)
   );
+  -- Maintainer-approved linguistic notes (grammar, never interpretation), authored for Lisan.
+  -- word is the displayed word position, or 0 for a note on the whole ayah.
+  CREATE TABLE notes (
+    surah INTEGER NOT NULL, ayah INTEGER NOT NULL, word INTEGER NOT NULL, language TEXT NOT NULL,
+    text TEXT NOT NULL,
+    PRIMARY KEY (surah, ayah, word, language)
+  ) WITHOUT ROWID;
 `;
 
 /** Surahs that open without a Basmala header: in Al-Fatiha it is ayah 1, At-Tawbah has none. */
@@ -124,6 +134,8 @@ export function buildContentDatabase(options: BuildOptions): void {
 
     /** Per ayah: gloss position → displayed word position. */
     const glossTargets = new Map<string, Map<number, number>>();
+    /** Per ayah: how many words it displays. */
+    const wordCounts = new Map<string, number>();
     const lemmaFrequency = new Map<string, number>();
     // Segments refer to terms by a small id, which keeps the database compact.
     const termIds = new Map(Object.keys(glossary).map((term, i) => [term, i + 1]));
@@ -135,6 +147,7 @@ export function buildContentDatabase(options: BuildOptions): void {
       const display = alignAyah(location, splitWords(text), corpusWordCount, alignment[location]);
       insertAyah.run(surah, ayah, quranAyah.juz, quranAyah.page, quranAyah.hizbQuarter ? 1 : 0);
 
+      wordCounts.set(location, display.length);
       const targets = new Map<number, number>();
       glossTargets.set(location, targets);
       display.forEach((word, i) => {
@@ -243,6 +256,22 @@ export function buildContentDatabase(options: BuildOptions): void {
           if (!covered.has(ayahKey))
             throw new Error(`${language} ${kind} ${key} is missing ${ayahKey}`);
         }
+      }
+    }
+
+    // Every note must point at a real ayah or word, reviewed or not, so a bad draft is caught
+    // before anyone approves it. Only approved notes are stored.
+    const insertNote = db.prepare('INSERT INTO notes VALUES (?, ?, ?, ?, ?)');
+    for (const { language, surah, notes } of options.notes) {
+      for (const { ayah, word, text, status } of notes) {
+        const location = `${surah}:${ayah}`;
+        const ref = word === null ? location : `${location}:${word}`;
+        const wordCount = wordCounts.get(location);
+        if (wordCount === undefined)
+          throw new Error(`${language} note on ${ref}: the text has no such ayah`);
+        if (word !== null && word > wordCount)
+          throw new Error(`${language} note on ${ref}: the ayah has ${wordCount} words`);
+        if (status === 'approved') insertNote.run(surah, ayah, word ?? 0, language, text.trim());
       }
     }
 

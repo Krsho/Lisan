@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { CONTENT_VERSION } from '../../src/content/version.ts';
 import { buildContentDatabase } from './build.ts';
 import { parseGlossary } from './glossary.ts';
+import { readNotesDirectory } from './notes.ts';
 import { parseQulWordByWord } from './qul.ts';
 import {
   parseQuranEncResult,
@@ -18,6 +19,7 @@ const ROOT = join(import.meta.dirname, '..', '..');
 const SOURCES_DIR = join(ROOT, 'content', 'sources');
 const QURANENC_DIR = join(SOURCES_DIR, 'quranenc');
 const OUT_DIR = join(ROOT, 'assets', 'content');
+const NOTES_DIR = join(ROOT, 'content', 'notes');
 const QUL_ENGLISH_WORD_BY_WORD = join(SOURCES_DIR, 'qul-english-word-by-word.json');
 
 const read = (file: string) => readFileSync(join(SOURCES_DIR, file), 'utf8');
@@ -50,6 +52,7 @@ buildContentDatabase({
   glossary: parseGlossary(readFileSync(join(ROOT, 'content', 'glossary.json'), 'utf8')),
   translations: { en: quranEnc('english_rwwad', 'sqlite') },
   tafsirs: { en: quranEnc('english_mokhtasar', 'json') },
+  notes: readNotesDirectory(NOTES_DIR),
   contentVersion: CONTENT_VERSION,
   outFile,
 });
