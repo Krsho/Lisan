@@ -1,202 +1,218 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Stack } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { AyahPlayButton, RecitationBar } from '../audio/RecitationControls';
+import { CenteredStatus } from '../async/CenteredStatus';
+import { useAsync } from '../async/useAsync';
+import { RecitationBar } from '../audio/RecitationControls';
 import { audioSource } from '../audio/source';
 import { useAyahPlayback, useSurahDownload } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
-import type {
-  Ayah,
-  AyahTranslation as AyahTranslationData,
-  LinkedWord,
-  SurahSummary,
-  Word,
-  WordRef,
-} from '../content/repository';
+import type { AyahTranslation, LinkedWord, SurahSummary } from '../content/repository';
 import type { AyahLemmas } from '../engine';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
-import { useEventLog } from '../user/UserStoreProvider';
+import { useBrowsePositions, useEventLog } from '../user/UserStoreProvider';
 import { AddToReview } from './AddToReview';
-import { AyahTranslation } from './AyahTranslation';
-import { LinguisticNotes, notesFor, useLinguisticNotes } from './LinguisticNotes';
-import { WordDetailSheet } from './WordDetailSheet';
-
-const toArabicDigits = (n: number) =>
-  String(n).replace(/\d/g, (d) => String.fromCharCode(0x0660 + Number(d)));
+import { notesFor, useLinguisticNotes } from './LinguisticNotes';
+import { JumpToAyah } from './JumpToAyah';
+import {
+  endsAyah,
+  keyOfPage,
+  placeOf,
+  startsAyah,
+  studyPages,
+  translationPageOf,
+  type StudyPage,
+} from './pages';
+import { describePosition, pageIndexOf, type Place } from './position';
+import { StudyPager } from './StudyPager';
+import { StudyView, WordCards } from './StudyView';
 
 type Props = {
   summary: SurahSummary;
-  /** Ayah to scroll to when the surah opens. */
+  /** Ayah to open the surah at; where the learner last stopped in it otherwise. */
   initialAyah?: number;
 };
 
-type Loaded = {
-  ayahs: Ayah[];
-  basmala: LinkedWord[] | null;
-  translations: Map<number, AyahTranslationData>;
-  /** Each ayah's lemmas, by ayah number, for adding it to review. */
-  lemmas: Map<number, AyahLemmas>;
-};
-
-/** A surah word by word with each ayah's translation: tap a word to see its grammar. */
+/**
+ * A surah one ayah per screen (one part per screen for a long ayah), each fully broken down; swipe
+ * right or press Next for the next. Opens where the learner last stopped in the surah (ayah 1 on a
+ * first visit) and remembers each place they view; tapping the header jumps to any ayah.
+ */
 export function SurahScreen({ summary, initialAyah }: Props) {
   const { surah, hasBasmala } = summary;
   const content = useContent();
-  const colors = useColors();
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
-  const list = useRef<FlatList<Ayah>>(null);
+  const positions = useBrowsePositions();
+  const state = useAsync(
+    () =>
+      Promise.all([
+        content.getSurah(surah, 'en'),
+        hasBasmala ? content.getBasmala('en') : Promise.resolve(null),
+        content.getTranslations(surah, 'en'),
+        content.getSurahLemmas(surah),
+        content.getSurahParts(surah),
+        initialAyah ? Promise.resolve({ ayah: initialAyah }) : positions.get(surah),
+      ]).then(([ayahs, basmala, texts, lemmas, parts, place]) => ({
+        pages: studyPages(ayahs, parts),
+        initialPlace: place ?? { ayah: 1 },
+        basmala,
+        translations: new Map(texts.map((t) => [t.ayah, t])),
+        // Each ayah's lemmas, by ayah number, for adding it to review.
+        lemmas: new Map(lemmas.map((a) => [a.ayah, a])),
+      })),
+    [content, surah, hasBasmala, initialAyah, positions],
+    `surah ${surah}`,
+  );
+
+  if (state.status !== 'loaded') {
+    return (
+      <>
+        <Stack.Screen options={{ title: summary.nameEnglish }} />
+        <CenteredStatus failed={state.status === 'failed'} message="Couldn't load this surah." />
+      </>
+    );
+  }
+  return <SurahPages summary={summary} {...state.data} />;
+}
+
+type PagesProps = {
+  summary: SurahSummary;
+  /** Where to open: the remembered place, or the ayah asked for. */
+  initialPlace: Place;
+  pages: StudyPage[];
+  basmala: LinkedWord[] | null;
+  translations: Map<number, AyahTranslation>;
+  lemmas: Map<number, AyahLemmas>;
+};
+
+function SurahPages({ summary, initialPlace, pages, basmala, translations, lemmas }: PagesProps) {
+  const { surah } = summary;
+  const pagePlaces = useMemo(() => pages.map(placeOf), [pages]);
+  const [index, setIndex] = useState(() => pageIndexOf(pagePlaces, initialPlace));
+  const positions = useBrowsePositions();
   const playback = useAyahPlayback(audioSource);
+  // The recitation stops when the learner leaves its page.
+  const { stop } = playback;
+  useEffect(() => stop, [stop, index]);
   const download = useSurahDownload(audioSource, surah, summary.ayahCount);
   const notes = useLinguisticNotes([surah], 'en');
   const { events, record } = useEventLog();
-  const listExtraData = useMemo(() => ({ playback, notes, events }), [playback, notes, events]);
+  // Changes, and so redraws the pages, when playback changes, once the notes load, and when the
+  // log or the download changes: not when the learner turns the page.
+  const renderPage = useCallback(
+    (page: StudyPage, i: number) => {
+      const { ayah } = page;
+      const ayahLemmas = lemmas.get(ayah);
+      const translationPage = translationPageOf(pages, i);
+      return (
+        <StudyView
+          passage={page}
+          translation={translations.get(ayah) ?? null}
+          notes={notesFor(notes, surah, ayah)}
+          playback={playback}
+          onOpenTranslationPart={
+            translationPage !== undefined ? () => setIndex(translationPage) : undefined
+          }
+          header={ayah === 1 && startsAyah(page) && basmala ? <Basmala words={basmala} /> : null}
+          footer={
+            <>
+              {/* The ayah's own controls go after its last part. */}
+              {ayahLemmas && endsAyah(page) ? (
+                <AddToReview ayah={ayahLemmas} events={events} record={record} />
+              ) : null}
+              <RecitationBar source={audioSource} download={download} error={playback.error} />
+            </>
+          }
+        />
+      );
+    },
+    [pages, lemmas, translations, notes, surah, playback, basmala, events, record, download],
+  );
+  const current = pages[index];
+  const place = current ? placeOf(current) : null;
 
+  // Remember each place viewed, to reopen the surah there; this records no learning events.
+  const { save } = positions;
+  const placeAyah = place?.ayah;
+  const placePart = place?.part;
   useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      content.getSurah(surah, 'en'),
-      hasBasmala ? content.getBasmala('en') : Promise.resolve(null),
-      content.getTranslations(surah, 'en'),
-      content.getSurahLemmas(surah),
-    ]).then(
-      ([ayahs, basmala, texts, lemmas]) => {
-        if (cancelled) return;
-        setLoaded({
-          ayahs,
-          basmala,
-          translations: new Map(texts.map((t) => [t.ayah, t])),
-          lemmas: new Map(lemmas.map((a) => [a.ayah, a])),
-        });
-      },
-      (error: unknown) => {
-        console.error('Failed to load surah', surah, error);
-        if (!cancelled) setFailed(true);
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [content, surah, hasBasmala]);
-
-  if (!loaded) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        {failed ? (
-          <Text style={{ color: colors.text }}>Couldn&apos;t load this surah.</Text>
-        ) : (
-          <ActivityIndicator />
-        )}
-      </View>
-    );
-  }
-
-  const initialIndex = initialAyah ? loaded.ayahs.findIndex((a) => a.ayah === initialAyah) : -1;
+    if (placeAyah !== undefined) save({ surah, ayah: placeAyah, part: placePart });
+  }, [save, surah, placeAyah, placePart]);
+  const title = current
+    ? describePosition(summary.nameEnglish, current.ayah, summary.ayahCount, current.part)
+    : summary.nameEnglish;
 
   return (
     <>
-      <FlatList
-        ref={list}
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={styles.content}
-        data={loaded.ayahs}
-        // Redraw the play buttons when playback changes, the ayahs once their notes load, and
-        // "Add this ayah to my review" when the log changes.
-        extraData={listExtraData}
-        keyExtractor={(ayah) => String(ayah.ayah)}
-        initialNumToRender={Math.max(8, initialIndex + 4)}
-        onLayout={() => {
-          if (initialIndex > 0)
-            list.current?.scrollToIndex({ index: initialIndex, animated: false });
-        }}
-        // Ayahs have different heights, so a far ayah may not be measured yet: jump close to it
-        // and try again.
-        onScrollToIndexFailed={({ index, averageItemLength }) => {
-          list.current?.scrollToOffset({ offset: averageItemLength * index, animated: false });
-          setTimeout(() => list.current?.scrollToIndex({ index, animated: false }), 100);
-        }}
-        ListHeaderComponent={
-          <>
-            <RecitationBar source={audioSource} download={download} error={playback.error} />
-            {loaded.basmala ? (
-              <View style={[styles.basmala, { borderColor: colors.border }]}>
-                <WordRow words={loaded.basmala} onPressWord={(word) => setSelectedWord(word.ref)} />
-              </View>
-            ) : null}
-          </>
-        }
-        renderItem={({ item: ayah }) => {
-          const translation = loaded.translations.get(ayah.ayah);
-          const lemmas = loaded.lemmas.get(ayah.ayah);
-          return (
-            <View style={[styles.ayah, { borderColor: colors.border }]}>
-              <AyahPlayButton ayahRef={{ surah, ayah: ayah.ayah }} playback={playback} />
-              <WordRow
-                words={ayah.words}
-                ayahNumber={ayah.ayah}
-                onPressWord={(word) =>
-                  setSelectedWord({ surah, ayah: ayah.ayah, word: word.position })
-                }
-              />
-              {translation ? <AyahTranslation data={translation} /> : null}
-              <LinguisticNotes notes={notesFor(notes, surah, ayah.ayah)} words={ayah.words} />
-              {lemmas ? <AddToReview ayah={lemmas} events={events} record={record} /> : null}
-            </View>
-          );
+      <Stack.Screen
+        options={{
+          title,
+          headerTitle: () => (
+            <JumpToAyah
+              title={title}
+              ayahCount={summary.ayahCount}
+              current={current?.ayah ?? 1}
+              onJump={(ayah) => setIndex(pageIndexOf(pagePlaces, { ayah }))}
+            />
+          ),
         }}
       />
-      <WordDetailSheet wordRef={selectedWord} onClose={() => setSelectedWord(null)} />
+      <StudyPager
+        pages={pages}
+        keyOf={keyOfPage}
+        index={index}
+        onIndexChange={setIndex}
+        renderPage={renderPage}
+      />
     </>
   );
 }
 
-type WordRowProps<W extends Word> = {
-  words: W[];
-  /** Drawn after the last word, as in the mushaf. Omitted for the Basmala header. */
-  ayahNumber?: number;
-  onPressWord: (word: W) => void;
-};
-
-function WordRow<W extends Word>({ words, ayahNumber, onPressWord }: WordRowProps<W>) {
+/**
+ * The Basmala heading a surah's first ayah, compact; "Show breakdown" opens a card for each of its
+ * words, as in Al-Fatiha 1:1, where they are from.
+ */
+function Basmala({ words }: { words: LinkedWord[] }) {
   const colors = useColors();
   const size = useQuranTextSize();
-  const arabic = [styles.arabic, size.text(30, 56)];
-  const word = [styles.word, { maxWidth: size.width(140) }];
+  const [open, setOpen] = useState(false);
+  const [first] = words;
   return (
-    <View style={[styles.words, ayahNumber ? null : styles.centeredWords]}>
-      {words.map((w) => (
-        <Pressable
-          key={w.position}
-          style={word}
-          accessibilityRole="button"
-          accessibilityHint="Shows the word's grammar"
-          onPress={() => onPressWord(w)}
-        >
-          <Text style={[arabic, { color: colors.text }]}>{w.text}</Text>
-          <Text style={[styles.gloss, { color: colors.muted }]}>{w.gloss ?? '—'}</Text>
-        </Pressable>
-      ))}
-      {ayahNumber ? (
-        <View style={word} accessibilityLabel={`Ayah ${ayahNumber}`}>
-          <Text style={[arabic, { color: colors.accent }]}>{`۝${toArabicDigits(ayahNumber)}`}</Text>
-        </View>
+    <View style={[styles.basmala, { borderColor: colors.border }]}>
+      <Text style={[styles.basmalaText, size.text(24, 46), { color: colors.muted }]}>
+        {words.map((w) => w.text).join(' ')}
+      </Text>
+      {first ? (
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              open ? "Hide the Basmala's breakdown" : "Show the Basmala's breakdown"
+            }
+            accessibilityState={{ expanded: open }}
+            onPress={() => setOpen((o) => !o)}
+            hitSlop={8}
+          >
+            <Text style={[styles.toggle, { color: colors.accent }]}>
+              {open ? 'Hide breakdown' : 'Show breakdown'}
+            </Text>
+          </Pressable>
+          {open ? (
+            <View style={styles.basmalaCards}>
+              <WordCards passage={{ surah: first.ref.surah, ayah: first.ref.ayah, words }} />
+            </View>
+          ) : null}
+        </>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16 },
-  basmala: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  ayah: { paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth },
-  // Arabic reads right to left, so words flow from the right edge.
-  words: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 12, columnGap: 14 },
-  centeredWords: { justifyContent: 'center' },
+  basmala: { paddingBottom: 8, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
+  basmalaCards: { gap: 12 },
+  toggle: { fontSize: 14, fontWeight: '600', textAlign: 'center' },
   // Sizes come from the font size setting (useQuranTextSize).
-  word: { alignItems: 'center' },
-  arabic: { fontFamily: QURAN_FONT_FAMILY },
-  gloss: { fontSize: 13, textAlign: 'center' },
+  basmalaText: { fontFamily: QURAN_FONT_FAMILY, textAlign: 'center' },
 });

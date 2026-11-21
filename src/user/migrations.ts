@@ -40,6 +40,17 @@ export const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE review_events ADD COLUMN utc_offset_minutes INTEGER;
   `,
+  // 4: where the learner last was in each surah in Browse, to reopen it there. Device-local and
+  // separate from the event log: remembering a place never changes learning state. `part` is the
+  // part of a long ayah (1-based), NULL for an ayah shown whole.
+  `
+  CREATE TABLE browse_positions (
+    surah INTEGER PRIMARY KEY,
+    ayah INTEGER NOT NULL,
+    part INTEGER,
+    updated_at INTEGER NOT NULL
+  ) STRICT;
+  `,
 ];
 
 /** Brings the database up to the latest schema. Each step commits on its own, with its version. */

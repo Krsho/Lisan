@@ -29,6 +29,17 @@ const ayah = (surah: number, number: number, ...words: string[][]): PathAyah => 
 const ayahOfNewWords = (surah: number, number: number, count: number, prefix: string) =>
   ayah(surah, number, ...Array.from({ length: count }, (_, i) => [`${prefix}${i + 1}`]));
 
+/** The ayah split into parts of the given sizes, as the content build splits a long ayah. */
+const inParts = (a: PathAyah, ...sizes: number[]): PathAyah => {
+  let next = a.words[0].position;
+  const parts = sizes.map((size) => {
+    const part = { fromWord: next, toWord: next + size - 1 };
+    next += size;
+    return part;
+  });
+  return { ...a, parts };
+};
+
 // A shortened path in the content's order: part of Al-Fatiha, then part of An-Nas.
 const content = {
   path: [
@@ -108,41 +119,63 @@ describe('the daily new-ayah session', () => {
     ]);
   });
 
-  it('splits a long ayah across days', () => {
-    const long = { path: [ayahOfNewWords(2, 282, 40, 'w'), ayahOfNewWords(2, 283, 3, 'x')] };
+  it('splits a long ayah across days only at its part boundaries', () => {
+    const long = {
+      path: [
+        inParts(ayahOfNewWords(2, 282, 40, 'w'), 12, 3, 10, 15),
+        ayahOfNewWords(2, 283, 3, 'x'),
+      ],
+    };
 
-    const { plans } = studyDays(4, long);
+    const { plans } = studyDays(5, long);
 
+    // Each day continues from the next part; 2:283 waits whole when it doesn't fit.
     expect(plans.map(passages)).toEqual([
       ['2:282:1-15'],
-      ['2:282:16-30'],
-      ['2:282:31-40', '2:283:1-3'],
+      ['2:282:16-25'],
+      ['2:282:26-40'],
+      ['2:283:1-3'],
       [],
     ]);
   });
 
-  it('takes at least one word even when a single word exceeds the budget', () => {
+  it('resumes mid-part from a log split at a word, then keeps to the part boundaries', () => {
+    // An older content version split the ayah at word 20; this one splits it into parts.
+    const words = ayahOfNewWords(2, 282, 40, 'w');
+    const older = { path: [inParts(words, 20, 20)] };
+    const { log } = studyDays(1, older);
+    const current = { path: [inParts(words, 12, 3, 10, 15)] };
+
+    const day2 = planSession(current, log, normal, at(START + DAY));
+    const later = record(log, completeSession(day2, log, at(START + DAY)));
+    const day3 = planSession(current, later, normal, at(START + 2 * DAY));
+
+    // Word 21 is inside the part 16–25: the session finishes that part, then goes part by part.
+    expect(passages(day2)).toEqual(['2:282:21-25']);
+    expect(passages(day3)).toEqual(['2:282:26-40']);
+  });
+
+  it('takes a part whole even when it alone is over the budget', () => {
+    const long = { path: [inParts(ayahOfNewWords(2, 282, 30, 'w'), 20, 10)] };
+
+    const { plans } = studyDays(2, long);
+
+    expect(plans.map(passages)).toEqual([['2:282:1-20'], ['2:282:21-30']]);
+  });
+
+  it('takes an ayah without parts whole, even when it is over the budget', () => {
     const plan = planSession(
-      {
-        path: [
-          ayah(
-            1,
-            1,
-            Array.from({ length: 40 }, (_, i) => `l${i}`),
-          ),
-          ayah(1, 2, ['j']),
-        ],
-      },
+      { path: [ayahOfNewWords(1, 1, 20, 'l'), ayah(1, 2, ['j'])] },
       [],
       { pace: 'light' },
       at(START),
     );
 
-    expect(passages(plan)).toEqual(['1:1:1-1']);
+    expect(passages(plan)).toEqual(['1:1:1-20']);
   });
 
   it('sets the budget from the pace', () => {
-    const path = { path: [ayahOfNewWords(2, 282, 40, 'w')] };
+    const path = { path: [inParts(ayahOfNewWords(2, 282, 40, 'w'), 5, 5, 5, 5, 5, 5, 5, 5)] };
 
     const budget = (pace: PlanSettings['pace']) =>
       planSession(path, [], { pace }, at(START)).newLemmas.length;
@@ -168,13 +201,16 @@ describe('the daily new-ayah session', () => {
     expect(plan.newMaterial[0]).toMatchObject({ ayah: 1, fromWord: 1 });
   });
 
-  it('splits a long ayah of known words at the session word limit', () => {
-    const long = { path: [ayah(2, 282, ...Array.from({ length: 100 }, () => ['known']))] };
+  it('splits a long ayah of known words at a part boundary within the session word limit', () => {
+    const words = ayah(2, 282, ...Array.from({ length: 100 }, () => ['known']));
+    const long = { path: [inParts(words, 20, 20, 20, 20, 20)] };
     const log = record([], [markKnown('known', { surah: 2, ayah: 282, word: 1 }, at(START))]);
 
     const plan = planSession(long, log, normal, at(START + 1000));
 
-    expect(passages(plan)).toEqual([`2:282:1-${SESSION_WORD_LIMIT.normal}`]);
+    // Two parts of 20 fit the word limit of 45; a third would not.
+    expect(SESSION_WORD_LIMIT.normal).toBe(45);
+    expect(passages(plan)).toEqual(['2:282:1-40']);
   });
 
   it('has no new material once the path is finished', () => {

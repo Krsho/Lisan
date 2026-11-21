@@ -3,7 +3,16 @@ import type { ReactNode } from 'react';
 
 import { SettingsProvider } from '../settings/SettingsContext';
 import { DEFAULT_APP_SETTINGS, type AppSettings } from '../settings/settings';
-import { AyahTranslation } from './AyahTranslation';
+import { TafsirSection, TranslationSection } from './AyahTranslation';
+
+function AyahTranslation({ data }: { data: typeof ayah }) {
+  return (
+    <>
+      <TranslationSection data={data} />
+      <TafsirSection data={data} />
+    </>
+  );
+}
 
 const ayah = {
   ayah: 4,

@@ -1,3 +1,5 @@
+import type { WordRange } from '../engine';
+
 /** Minimal async SQL access, so the same repository works over expo-sqlite (app) and node:sqlite (tools/tests). */
 export type SqlRunner = {
   all<Row>(sql: string, params: (string | number)[]): Promise<Row[]>;
@@ -62,6 +64,22 @@ export type Segment = {
 };
 
 export type WordDetails = Word & { ref: WordRef; segments: Segment[] };
+
+/**
+ * One part of a long ayah, split at pause marks for study: one screen in Browse and the session.
+ * Its words run from `fromWord` to `toWord`, the range the engine splits sessions at.
+ */
+export type AyahPart = WordRange & {
+  surah: number;
+  ayah: number;
+  /** 1-based. */
+  part: number;
+  /** How many parts the ayah has (at least 2: ayahs studied whole have no parts). */
+  count: number;
+};
+
+const PART_COLUMNS = `p.surah, p.ayah, p.part, p.first_word AS fromWord, p.last_word AS toWord,
+  (SELECT COUNT(*) FROM ayah_parts c WHERE c.surah = p.surah AND c.ayah = p.ayah) AS count`;
 
 /** An ayah on the curated path, with the lemmas of each of its words (what the engine plans with). */
 export type PathAyah = {
@@ -218,6 +236,25 @@ export function createContentRepository(db: SqlRunner) {
           WHERE a.surah = ?
           ORDER BY a.ayah`,
         [language, language, surah],
+      );
+    },
+
+    /** The parts of a surah's long ayahs, in order. Ayahs studied whole have none. */
+    async getSurahParts(surah: number): Promise<AyahPart[]> {
+      return db.all<AyahPart>(
+        `SELECT ${PART_COLUMNS} FROM ayah_parts p WHERE p.surah = ? ORDER BY p.ayah, p.part`,
+        [surah],
+      );
+    },
+
+    /** The parts of the long ayahs on the curated path, in path order, for the session. */
+    async getPathParts(): Promise<AyahPart[]> {
+      return db.all<AyahPart>(
+        `SELECT ${PART_COLUMNS}
+           FROM path
+           JOIN ayah_parts p ON p.surah = path.surah AND p.ayah = path.ayah
+          ORDER BY path.position, p.part`,
+        [],
       );
     },
 

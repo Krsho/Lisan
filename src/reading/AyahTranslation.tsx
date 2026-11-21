@@ -5,63 +5,67 @@ import type { AyahTranslation as AyahTranslationData } from '../content/reposito
 import { useSettings } from '../settings/SettingsContext';
 import { useColors, type Colors } from '../theme/colors';
 
+type Props = { data: AyahTranslationData };
+
 /**
- * An ayah's full translation with its footnotes, and its short tafsir. Each starts open or closed
- * as the settings say, until the learner toggles it. Both are shown exactly as QuranEnc publishes
- * them, so the tafsir keeps its "N. " prefix.
+ * An ayah's full translation and its footnotes, open or closed as the settings say until toggled.
+ * Shown exactly as QuranEnc publishes it, as is the tafsir, which keeps its "N. " prefix.
  */
-export function AyahTranslation({ data }: { data: AyahTranslationData }) {
+export function TranslationSection({ data }: Props) {
   const colors = useColors();
-  const { showTranslation, showTafsir } = useSettings();
+  const { showTranslation } = useSettings();
   // null follows the setting, so changing it applies to ayahs already on screen.
-  const [translationToggled, setTranslationToggled] = useState<boolean | null>(null);
-  const [tafsirToggled, setTafsirToggled] = useState<boolean | null>(null);
-  const translationOpen = translationToggled ?? showTranslation;
-  const tafsirOpen = tafsirToggled ?? showTafsir;
-  const hasTranslation = Boolean(data.translation || data.footnotes);
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? showTranslation;
+  if (!data.translation && !data.footnotes) return null;
+
+  if (!open) {
+    return (
+      <Toggle
+        label="Show translation"
+        expanded={false}
+        colors={colors}
+        onPress={() => setToggled(true)}
+      />
+    );
+  }
+  return (
+    <View style={styles.section}>
+      {data.translation ? (
+        <Text style={[styles.translation, { color: colors.text }]}>{data.translation}</Text>
+      ) : null}
+      {data.footnotes ? (
+        <Text style={[styles.footnotes, { color: colors.muted }]}>{data.footnotes}</Text>
+      ) : null}
+      {showTranslation ? null : (
+        <Toggle
+          label="Hide translation"
+          expanded
+          colors={colors}
+          onPress={() => setToggled(false)}
+        />
+      )}
+    </View>
+  );
+}
+
+/** The short tafsir, folded or open as the settings say until toggled. */
+export function TafsirSection({ data }: Props) {
+  const colors = useColors();
+  const { showTafsir } = useSettings();
+  const [toggled, setToggled] = useState<boolean | null>(null);
+  const open = toggled ?? showTafsir;
+  if (!data.tafsir) return null;
 
   return (
-    <View style={styles.container}>
-      {hasTranslation ? (
-        translationOpen ? (
-          <>
-            {data.translation ? (
-              <Text style={[styles.translation, { color: colors.text }]}>{data.translation}</Text>
-            ) : null}
-            {data.footnotes ? (
-              <Text style={[styles.footnotes, { color: colors.muted }]}>{data.footnotes}</Text>
-            ) : null}
-            {showTranslation ? null : (
-              <Toggle
-                label="Hide translation"
-                expanded
-                colors={colors}
-                onPress={() => setTranslationToggled(false)}
-              />
-            )}
-          </>
-        ) : (
-          <Toggle
-            label="Show translation"
-            expanded={false}
-            colors={colors}
-            onPress={() => setTranslationToggled(true)}
-          />
-        )
-      ) : null}
-      {data.tafsir ? (
-        <View style={[styles.tafsir, { backgroundColor: colors.surface }]}>
-          <Toggle
-            label={tafsirOpen ? 'Hide tafsir' : 'Show tafsir'}
-            expanded={tafsirOpen}
-            colors={colors}
-            onPress={() => setTafsirToggled(!tafsirOpen)}
-          />
-          {tafsirOpen ? (
-            <Text style={[styles.tafsirText, { color: colors.text }]}>{data.tafsir}</Text>
-          ) : null}
-        </View>
-      ) : null}
+    <View style={[styles.tafsir, { backgroundColor: colors.surface }]}>
+      <Toggle
+        label={open ? 'Hide tafsir' : 'Show tafsir'}
+        expanded={open}
+        colors={colors}
+        onPress={() => setToggled(!open)}
+      />
+      {open ? <Text style={[styles.tafsirText, { color: colors.text }]}>{data.tafsir}</Text> : null}
     </View>
   );
 }
@@ -82,7 +86,7 @@ function Toggle({ label, expanded, colors, onPress }: ToggleProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 12, gap: 8 },
+  section: { gap: 8 },
   translation: { fontSize: 16, lineHeight: 24 },
   footnotes: { fontSize: 13, lineHeight: 19 },
   tafsir: { borderRadius: 8, padding: 10, gap: 6 },
