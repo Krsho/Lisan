@@ -27,7 +27,7 @@ import {
 import { AyahTranslation } from '../reading/AyahTranslation';
 import { WordDetailSheet } from '../reading/WordDetailSheet';
 import { useColors } from '../theme/colors';
-import { QURAN_FONT_FAMILY } from '../theme/quranFont';
+import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { useEventLog } from '../user/UserStoreProvider';
 import { describePassages } from './describe';
 import { QuizScreen, type QuizResult } from './QuizScreen';
@@ -65,6 +65,7 @@ const ayahKey = (surah: number, ayah: number) => `${surah}:${ayah}`;
 function Session({ content, onDone }: Props & { content: Content }) {
   const repository = useContent();
   const colors = useColors();
+  const size = useQuranTextSize();
   const { events, record } = useEventLog();
   // Planned once: marking "I know this" during the session doesn't change what is studied today.
   const [plan] = useState<SessionPlan>(() =>
@@ -215,7 +216,7 @@ function Session({ content, onDone }: Props & { content: Content }) {
                 accessibilityHint="Shows the word's grammar"
                 onPress={() => setSelectedWord(lemma.wordRef)}
               >
-                <Text style={[styles.lemmaArabic, { color: colors.text }]}>
+                <Text style={[styles.lemmaArabic, size.text(22, 40), { color: colors.text }]}>
                   {lemma.lemmaId}
                   {word ? `  ·  ${word.bare}` : ''}
                 </Text>
@@ -265,6 +266,7 @@ type PassageWordsProps = { ayah: Ayah; passage: Passage; onPressWord: (word: Wor
 /** The ayah word by word, with words outside today's part of it dimmed. */
 function PassageWords({ ayah, passage, onPressWord }: PassageWordsProps) {
   const colors = useColors();
+  const size = useQuranTextSize();
   return (
     <View style={styles.words}>
       {ayah.words.map((word) => {
@@ -272,12 +274,14 @@ function PassageWords({ ayah, passage, onPressWord }: PassageWordsProps) {
         return (
           <Pressable
             key={word.position}
-            style={[styles.word, { opacity: inPassage ? 1 : 0.35 }]}
+            style={[styles.word, { maxWidth: size.width(140), opacity: inPassage ? 1 : 0.35 }]}
             accessibilityRole="button"
             accessibilityHint="Shows the word's grammar"
             onPress={() => onPressWord(word)}
           >
-            <Text style={[styles.arabic, { color: colors.text }]}>{word.text}</Text>
+            <Text style={[styles.arabic, size.text(30, 56), { color: colors.text }]}>
+              {word.text}
+            </Text>
             <Text style={[styles.gloss, { color: colors.muted }]}>{word.gloss ?? '—'}</Text>
           </Pressable>
         );
@@ -342,8 +346,9 @@ const styles = StyleSheet.create({
   reference: { fontSize: 13, marginBottom: 4 },
   // Arabic reads right to left, so words flow from the right edge.
   words: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 12, columnGap: 14 },
-  word: { alignItems: 'center', maxWidth: 140 },
-  arabic: { fontFamily: QURAN_FONT_FAMILY, fontSize: 30, lineHeight: 56 },
+  // Quran text sizes come from the font size setting (useQuranTextSize).
+  word: { alignItems: 'center' },
+  arabic: { fontFamily: QURAN_FONT_FAMILY },
   gloss: { fontSize: 13, textAlign: 'center' },
   heading: { fontSize: 18, fontWeight: '700', marginTop: 8 },
   lemma: {
@@ -354,7 +359,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   lemmaText: { flex: 1, gap: 2 },
-  lemmaArabic: { fontFamily: QURAN_FONT_FAMILY, fontSize: 22, lineHeight: 40 },
+  lemmaArabic: { fontFamily: QURAN_FONT_FAMILY },
   knowButton: {
     borderWidth: 1,
     borderRadius: 16,

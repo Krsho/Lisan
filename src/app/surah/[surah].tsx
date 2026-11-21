@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { useSurahs } from '../../content/useSurahs';
 import { SurahScreen } from '../../reading/SurahScreen';
+import { SettingsHeaderButton } from '../../settings/SettingsHeaderButton';
 import { useColors } from '../../theme/colors';
 
 /** `/surah/2` reads Al-Baqarah; `/surah/2?ayah=255` opens it at ayah 255. */
@@ -34,7 +35,12 @@ export default function SurahRoute() {
 
   return (
     <>
-      <Stack.Screen options={{ title: `${summary.surah}. ${summary.nameEnglish}` }} />
+      <Stack.Screen
+        options={{
+          title: `${summary.surah}. ${summary.nameEnglish}`,
+          headerRight: () => <SettingsHeaderButton />,
+        }}
+      />
       <SurahScreen summary={summary} initialAyah={ayah} />
     </>
   );

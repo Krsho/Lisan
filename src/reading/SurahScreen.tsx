@@ -14,7 +14,7 @@ import type {
   WordRef,
 } from '../content/repository';
 import { useColors } from '../theme/colors';
-import { QURAN_FONT_FAMILY } from '../theme/quranFont';
+import { QURAN_FONT_FAMILY, useQuranTextSize } from '../theme/quranFont';
 import { AyahTranslation } from './AyahTranslation';
 import { WordDetailSheet } from './WordDetailSheet';
 
@@ -142,25 +142,26 @@ type WordRowProps<W extends Word> = {
 
 function WordRow<W extends Word>({ words, ayahNumber, onPressWord }: WordRowProps<W>) {
   const colors = useColors();
+  const size = useQuranTextSize();
+  const arabic = [styles.arabic, size.text(30, 56)];
+  const word = [styles.word, { maxWidth: size.width(140) }];
   return (
     <View style={[styles.words, ayahNumber ? null : styles.centeredWords]}>
-      {words.map((word) => (
+      {words.map((w) => (
         <Pressable
-          key={word.position}
-          style={styles.word}
+          key={w.position}
+          style={word}
           accessibilityRole="button"
           accessibilityHint="Shows the word's grammar"
-          onPress={() => onPressWord(word)}
+          onPress={() => onPressWord(w)}
         >
-          <Text style={[styles.arabic, { color: colors.text }]}>{word.text}</Text>
-          <Text style={[styles.gloss, { color: colors.muted }]}>{word.gloss ?? '—'}</Text>
+          <Text style={[arabic, { color: colors.text }]}>{w.text}</Text>
+          <Text style={[styles.gloss, { color: colors.muted }]}>{w.gloss ?? '—'}</Text>
         </Pressable>
       ))}
       {ayahNumber ? (
-        <View style={styles.word} accessibilityLabel={`Ayah ${ayahNumber}`}>
-          <Text style={[styles.arabic, { color: colors.accent }]}>
-            {`۝${toArabicDigits(ayahNumber)}`}
-          </Text>
+        <View style={word} accessibilityLabel={`Ayah ${ayahNumber}`}>
+          <Text style={[arabic, { color: colors.accent }]}>{`۝${toArabicDigits(ayahNumber)}`}</Text>
         </View>
       ) : null}
     </View>
@@ -175,7 +176,8 @@ const styles = StyleSheet.create({
   // Arabic reads right to left, so words flow from the right edge.
   words: { flexDirection: 'row-reverse', flexWrap: 'wrap', rowGap: 12, columnGap: 14 },
   centeredWords: { justifyContent: 'center' },
-  word: { alignItems: 'center', maxWidth: 140 },
-  arabic: { fontFamily: QURAN_FONT_FAMILY, fontSize: 30, lineHeight: 56 },
+  // Sizes come from the font size setting (useQuranTextSize).
+  word: { alignItems: 'center' },
+  arabic: { fontFamily: QURAN_FONT_FAMILY },
   gloss: { fontSize: 13, textAlign: 'center' },
 });

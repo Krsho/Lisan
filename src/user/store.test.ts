@@ -150,3 +150,32 @@ describe('user store', () => {
     expect((await store.listEvents()).map((e) => e.lemmaId)).toEqual(['a', 'b']);
   });
 });
+
+describe('settings in the user database', () => {
+  it('starts with none stored', async () => {
+    const store = await openStore();
+
+    expect(await store.listSettings()).toEqual([]);
+  });
+
+  it('keeps the latest value of each setting', async () => {
+    const store = await openStore();
+
+    await store.saveSettings(
+      [
+        { key: 'theme', value: '"dark"' },
+        { key: 'showTafsir', value: 'true' },
+      ],
+      1,
+    );
+    await store.saveSettings([{ key: 'theme', value: '"light"' }], 2);
+
+    expect(await createUserStore(db, randomUUID).listSettings()).toEqual([
+      { key: 'showTafsir', value: 'true' },
+      { key: 'theme', value: '"light"' },
+    ]);
+    expect(await db.all('SELECT updated_at FROM settings WHERE key = ?', ['theme'])).toEqual([
+      { updated_at: 2 },
+    ]);
+  });
+});

@@ -1,4 +1,5 @@
 import type { EventDraft, ReviewEvent } from '../engine';
+import type { SettingRow } from '../settings/settings';
 import type { SqlValue, UserSqlRunner } from './sql';
 
 type EventRow = {
@@ -66,7 +67,8 @@ const INSERT_EVENT = `
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 /**
- * The learner's data in the user database: the device id and the append-only event log.
+ * The learner's data in the user database: the device id, the append-only event log and
+ * settings.
  * The database must already be migrated (migrateUserDb).
  */
 export function createUserStore(db: UserSqlRunner, newId: () => string) {
@@ -118,6 +120,23 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
         [],
       );
       return rows.map(toEvent).filter((e): e is ReviewEvent => e !== null);
+    },
+
+    /** Every stored setting, as written by saveSettings. */
+    listSettings(): Promise<SettingRow[]> {
+      return db.all<SettingRow>('SELECT key, value FROM settings ORDER BY key', []);
+    },
+
+    /** Stores settings, replacing their previous values; `updatedAt` is epoch ms. */
+    async saveSettings(rows: SettingRow[], updatedAt: number): Promise<void> {
+      // One statement per setting, each atomic on its own, and no transaction: a quick run of
+      // changes (tapping A+ twice) must not try to open a transaction inside another.
+      for (const { key, value } of rows)
+        await db.run(
+          `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+          [key, value, updatedAt],
+        );
     },
   };
   return store;
