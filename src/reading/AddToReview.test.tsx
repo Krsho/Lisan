@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
-import type { EventDraft, ReviewEvent } from '../engine';
+import type { EventDraft, LogEvent } from '../engine';
 import { AddToReview } from './AddToReview';
 
 const kursi = {
@@ -14,7 +14,7 @@ const kursi = {
 };
 
 const asLogged = (drafts: EventDraft[]) =>
-  drafts.map((d, i) => ({ ...d, id: `e${i}`, deviceId: 'device-a' }) as ReviewEvent);
+  drafts.map((d, i) => ({ ...d, id: `e${i}`, deviceId: 'device-a' }) as LogEvent);
 
 it('changes nothing until the learner asks to add the ayah', async () => {
   const record = jest.fn(async () => {});

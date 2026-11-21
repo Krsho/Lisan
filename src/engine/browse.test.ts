@@ -1,13 +1,13 @@
 import {
   addAyahToReview,
-  DEFAULT_SETTINGS,
+  DEFAULT_PLAN_SETTINGS,
   lemmaCards,
   markKnown,
   planSession,
   RATING,
   type EventDraft,
   type PathAyah,
-  type ReviewEvent,
+  type LogEvent,
 } from '.';
 
 // A fixed clock: 21 November 2026, 09:00 UTC, in UTC.
@@ -24,9 +24,9 @@ const ayah = (surah: number, number: number, ...words: string[][]): PathAyah => 
 
 let nextId = 0;
 /** The log after the drafts are recorded on this device. */
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
 // Ayat al-Kursi's opening, browsed outside the path: 2:255.
@@ -48,7 +48,7 @@ describe('adding a browsed ayah to review', () => {
   });
 
   it('adds nothing for lemmas already learned on the path, reviewed or marked "I know this"', () => {
-    let log: ReviewEvent[] = record(
+    let log: LogEvent[] = record(
       [],
       [
         {
@@ -121,12 +121,12 @@ describe('adding a browsed ayah to review', () => {
 
   it('does not move the curated path on, nor change what it introduces as new', () => {
     const path = { path: [ayah(1, 1, ['b', 'ism'], ['allah'], ['al', 'rahman'], ['al', 'rahim'])] };
-    const before = planSession(path, [], DEFAULT_SETTINGS, at(START + DAY));
+    const before = planSession(path, [], DEFAULT_PLAN_SETTINGS, at(START + DAY));
 
     const log = record([], addAyahToReview(kursi, [], at(START)));
 
     // Only the review changes: the added lemmas are due in it.
-    const after = planSession(path, log, DEFAULT_SETTINGS, at(START + DAY));
+    const after = planSession(path, log, DEFAULT_PLAN_SETTINGS, at(START + DAY));
     expect({ ...after, reviews: before.reviews }).toEqual(before);
     expect(after.reviews.map((r) => r.lemmaId)).toContain('hayy');
   });

@@ -4,12 +4,9 @@
  * adapter in ./notifications.ts carries out what these decide.
  */
 
-import { MINUTES_PER_DAY, type ReadingSettings } from '../settings/settings';
+import { MINUTES_PER_DAY, type AppSettings } from '../settings/settings';
 
-type ReminderSettings = Pick<
-  ReadingSettings,
-  'reminderEnabled' | 'reminderTime' | 'reminderOffered'
->;
+type ReminderSettings = Pick<AppSettings, 'reminderEnabled' | 'reminderTime' | 'reminderOffered'>;
 
 /** What the phone should have scheduled: one daily reminder at a local time, or none. */
 export type ReminderAction = { kind: 'daily'; hour: number; minute: number } | { kind: 'cancel' };

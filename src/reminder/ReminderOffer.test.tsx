@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
 import { SettingsProvider } from '../settings/SettingsContext';
-import { DEFAULT_READING_SETTINGS, type ReadingSettings } from '../settings/settings';
+import { DEFAULT_APP_SETTINGS, type AppSettings } from '../settings/settings';
 import { ReminderOffer } from './ReminderOffer';
 
 jest.mock('expo-notifications', () => jest.requireActual('../testing/expoNotificationsMock'));
@@ -11,7 +11,7 @@ const notifications =
 
 beforeEach(() => jest.clearAllMocks());
 
-async function renderOffer(settings: ReadingSettings = DEFAULT_READING_SETTINGS) {
+async function renderOffer(settings: AppSettings = DEFAULT_APP_SETTINGS) {
   const update = jest.fn();
   await render(
     <SettingsProvider value={{ settings, update }}>
@@ -54,7 +54,7 @@ it('leaves the reminder off when declined', async () => {
 });
 
 it('is not offered again', async () => {
-  const update = await renderOffer({ ...DEFAULT_READING_SETTINGS, reminderOffered: true });
+  const update = await renderOffer({ ...DEFAULT_APP_SETTINGS, reminderOffered: true });
 
   expect(screen.queryByText('A daily reminder?')).toBeNull();
   expect(update).not.toHaveBeenCalled();

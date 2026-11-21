@@ -8,7 +8,7 @@ import {
 } from 'ts-fsrs/middlewares';
 import { FSRS6_DEFAULT_WEIGHTS, FSRS6Model } from 'ts-fsrs/models/fsrs-6';
 
-import { chronological, RATING, type ReviewEvent, type WordRef } from './events';
+import { chronological, RATING, type LogEvent, type WordRef } from './events';
 
 // FSRS-6 with its default weights, built synchronously (DefaultScheduler loads the model with a
 // dynamic import). Fuzz is off, so replaying the same log gives the same schedule on every device.
@@ -69,9 +69,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * session, answered in a quiz or review, or added to review some other way), except "I know this"
  * and taking it back, which say nothing about having learned the lemma.
  */
-export function entersReview(
-  event: ReviewEvent,
-): event is Extract<ReviewEvent, { lemmaId: string }> {
+export function entersReview(event: LogEvent): event is Extract<LogEvent, { lemmaId: string }> {
   return event.lemmaId !== null && event.kind !== 'known' && event.kind !== 'known-undone';
 }
 
@@ -82,7 +80,7 @@ export function entersReview(
  * marked "I know this" keep their card here; the session leaves them out. Cards are never stored,
  * so merged logs reschedule consistently.
  */
-export function lemmaCards(log: ReviewEvent[]): Map<string, LemmaCard> {
+export function lemmaCards(log: LogEvent[]): Map<string, LemmaCard> {
   const ordered = chronological(log);
   // When each lemma entered the deck, and the word form its card shows: where the lemma was first
   // met (learned or added), or else where it was first asked.

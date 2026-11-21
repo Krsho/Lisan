@@ -3,7 +3,7 @@ import {
   type EventDraft,
   type GradedEvent,
   type Rating,
-  type ReviewEvent,
+  type LogEvent,
   type WordRef,
 } from './events';
 import { lemmaCards } from './cards';
@@ -284,7 +284,7 @@ const refKey = ({ surah, ayah, word }: WordRef) => `${surah}:${ayah}:${word}`;
  * prefix or suffix (such as the definite article) is asked about grammatically only. Wrong options
  * come from lemmas of the same part of speech and a similar frequency.
  */
-export function planQuiz(plan: SessionPlan, log: ReviewEvent[], content: QuizContent): QuizItem[] {
+export function planQuiz(plan: SessionPlan, log: LogEvent[], content: QuizContent): QuizItem[] {
   // Types take turns along the quiz.
   return questionsFor(plan.newLemmas, knownLemmas(log), content, (_, index) => index);
 }
@@ -295,11 +295,7 @@ export function planQuiz(plan: SessionPlan, log: ReviewEvent[], content: QuizCon
  * moves on with each review of a card, so a lemma is asked about in turn by meaning, by Arabic word
  * and by grammar. Cards marked "I know this" since the session was planned are left out.
  */
-export function planReview(
-  plan: SessionPlan,
-  log: ReviewEvent[],
-  content: QuizContent,
-): QuizItem[] {
+export function planReview(plan: SessionPlan, log: LogEvent[], content: QuizContent): QuizItem[] {
   const cards = lemmaCards(log);
   return questionsFor(
     plan.reviews,

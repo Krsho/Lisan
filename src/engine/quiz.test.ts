@@ -13,7 +13,7 @@ import {
   type QuizContent,
   type QuizItem,
   type QuizWord,
-  type ReviewEvent,
+  type LogEvent,
   type SessionPlan,
 } from '.';
 
@@ -145,12 +145,12 @@ const path: PathAyah[] = [
 ];
 
 let nextId = 0;
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
-const todaysPlan = (log: ReviewEvent[] = []) =>
+const todaysPlan = (log: LogEvent[] = []) =>
   planSession({ path }, log, { pace: 'normal' }, at(START));
 
 /** A plan that introduces just these lemmas, each in the word it is listed with. */

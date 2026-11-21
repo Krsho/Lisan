@@ -1,5 +1,5 @@
 import { lemmaCards, retrievability, type LemmaCard } from './cards';
-import { chronological, type EventDraft, type ReviewEvent, type WordRef } from './events';
+import { chronological, type EventDraft, type LogEvent, type WordRef } from './events';
 
 /** The moment to plan for, with the learner's UTC offset there, which sets where a day begins. */
 export type Now = { time: number; utcOffsetMinutes: number };
@@ -16,9 +16,10 @@ export type Content = { path: PathAyah[] };
 
 export type Pace = 'light' | 'normal' | 'intense';
 
-export type Settings = { pace: Pace };
+/** What of the learner's settings planning a session depends on. */
+export type PlanSettings = { pace: Pace };
 
-export const DEFAULT_SETTINGS: Settings = { pace: 'normal' };
+export const DEFAULT_PLAN_SETTINGS: PlanSettings = { pace: 'normal' };
 
 /** How many new lemmas a session introduces at each pace. */
 export const NEW_LEMMA_BUDGET: Record<Pace, number> = { light: 10, normal: 15, intense: 25 };
@@ -91,11 +92,11 @@ export const localDay = (time: number, utcOffsetMinutes: number) =>
  * so days stay right after travelling. Events recorded before offsets were stored fall back to
  * `fallbackOffset` (the learner's current one).
  */
-export const eventDay = (event: ReviewEvent, fallbackOffset: number) =>
+export const eventDay = (event: LogEvent, fallbackOffset: number) =>
   localDay(event.timestamp, event.utcOffsetMinutes ?? fallbackOffset);
 
 /** The lemmas the learner marked "I know this" and has not taken back. */
-export function knownLemmas(log: ReviewEvent[]): Set<string> {
+export function knownLemmas(log: LogEvent[]): Set<string> {
   const known = new Set<string>();
   for (const event of chronological(log)) {
     if (event.kind === 'known') known.add(event.lemmaId);
@@ -105,7 +106,7 @@ export function knownLemmas(log: ReviewEvent[]): Set<string> {
 }
 
 /** The lemmas met as new material in completed sessions. */
-export function learnedLemmas(log: ReviewEvent[]): Set<string> {
+export function learnedLemmas(log: LogEvent[]): Set<string> {
   return new Set(log.flatMap((e) => (e.kind === 'learn' ? [e.lemmaId] : [])));
 }
 
@@ -128,7 +129,7 @@ export type PathPosition = {
 };
 
 /** How far along the path the learner is, from the completed sessions and a chosen start point. */
-export function pathPosition(path: PathAyah[], log: ReviewEvent[]): PathPosition {
+export function pathPosition(path: PathAyah[], log: LogEvent[]): PathPosition {
   const index = new Map<string, PathPoint>();
   path.forEach((a, ayah) =>
     a.words.forEach((w, word) =>
@@ -181,8 +182,8 @@ export function chooseStart(content: Content, surah: number, now: Now): EventDra
  */
 export function planSession(
   content: Content,
-  log: ReviewEvent[],
-  settings: Settings,
+  log: LogEvent[],
+  settings: PlanSettings,
   now: Now,
 ): SessionPlan {
   const budget = NEW_LEMMA_BUDGET[settings.pace];
@@ -265,7 +266,7 @@ export function planSession(
  * oldest first; then reviewed cards, lowest retrievability first (among equals the longest
  * overdue). Slots one group leaves spare go to the other. "I know this" lemmas are never reviewed.
  */
-function dueReviews(log: ReviewEvent[], now: Now): ReviewCard[] {
+function dueReviews(log: LogEvent[], now: Now): ReviewCard[] {
   const known = knownLemmas(log);
   const due = [...lemmaCards(log).values()].filter(
     (c) => c.due <= now.time && !known.has(c.lemmaId),
@@ -295,7 +296,7 @@ const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
  */
 function recapFor(
   path: PathAyah[],
-  log: ReviewEvent[],
+  log: LogEvent[],
   { next: start, chosenStart }: PathPosition,
   now: Now,
 ): Passage[] {
@@ -326,7 +327,7 @@ function recapFor(
  * The events that record a finished session: each planned new lemma as learned (unless the learner
  * has marked it "I know this" by now), and how far along the path the session went.
  */
-export function completeSession(plan: SessionPlan, log: ReviewEvent[], now: Now): EventDraft[] {
+export function completeSession(plan: SessionPlan, log: LogEvent[], now: Now): EventDraft[] {
   const last = plan.newMaterial[plan.newMaterial.length - 1];
   if (!last) return [];
   const known = knownLemmas(log);

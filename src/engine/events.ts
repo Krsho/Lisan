@@ -67,7 +67,7 @@ export type GradedEvent = EventBase & {
  * and known lemmas, and later card state and streaks) is derived from the log; nothing else is
  * stored, so logs from several devices can be merged by union.
  */
-export type ReviewEvent =
+export type LogEvent =
   | LearnEvent
   | KnownEvent
   | KnownUndoneEvent
@@ -76,12 +76,12 @@ export type ReviewEvent =
   | StartEvent
   | GradedEvent;
 
-export type EventKind = ReviewEvent['kind'];
+export type EventKind = LogEvent['kind'];
 
-type Draft<E> = E extends ReviewEvent ? Omit<E, 'id' | 'deviceId'> : never;
+type Draft<E> = E extends LogEvent ? Omit<E, 'id' | 'deviceId'> : never;
 
 /** An event the engine decided on, before the user store gives it an id and the device id. */
-export type EventDraft = Draft<ReviewEvent>;
+export type EventDraft = Draft<LogEvent>;
 
 /** Events in the order they happened; ties (same millisecond) broken by id, so on every device alike. */
 export function chronological<E extends { timestamp: number; id: string }>(events: E[]): E[] {

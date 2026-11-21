@@ -1,4 +1,4 @@
-import type { EventDraft, ReviewEvent } from '../engine';
+import type { EventDraft, LogEvent } from '../engine';
 import type { SettingRow } from '../settings/settings';
 import type { SqlValue, UserSqlRunner } from './sql';
 
@@ -26,7 +26,7 @@ const RATINGS = new Set([1, 2, 3, 4]);
  * The event a row holds; 'unknown' for a kind from a newer app version (synced from another
  * device), kept in the table but left out; 'invalid' for a row not valid for its kind.
  */
-function toEvent(row: EventRow): ReviewEvent | 'unknown' | 'invalid' {
+function toEvent(row: EventRow): LogEvent | 'unknown' | 'invalid' {
   if (!KINDS.has(row.kind)) return 'unknown';
   if (row.surah === null || row.ayah === null || row.word === null) return 'invalid';
   if (LEMMA_KINDS.has(row.kind) !== (row.lemma_id !== null)) return 'invalid';
@@ -46,12 +46,12 @@ function toEvent(row: EventRow): ReviewEvent | 'unknown' | 'invalid' {
       rating: row.rating,
       correct: row.correct === 1,
       responseTimeMs: row.response_time_ms ?? 0,
-    } as ReviewEvent;
+    } as LogEvent;
   }
-  return { ...base, kind: row.kind } as ReviewEvent;
+  return { ...base, kind: row.kind } as LogEvent;
 }
 
-function toRow(event: ReviewEvent): SqlValue[] {
+function toRow(event: LogEvent): SqlValue[] {
   const { id, kind, lemmaId, wordRef, timestamp, deviceId, utcOffsetMinutes } = event;
   const graded = event.kind === 'review' ? event : null;
   return [
@@ -117,15 +117,15 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     },
 
     /** Records events the engine decided on, from this device. Returns them as stored. */
-    async record(drafts: EventDraft[]): Promise<ReviewEvent[]> {
+    async record(drafts: EventDraft[]): Promise<LogEvent[]> {
       const device = await store.getDeviceId();
-      const events = drafts.map((d) => ({ ...d, id: newId(), deviceId: device }) as ReviewEvent);
+      const events = drafts.map((d) => ({ ...d, id: newId(), deviceId: device }) as LogEvent);
       await store.addEvents(events);
       return events;
     },
 
     /** Adds complete events (e.g. from another device); ones already in the log are skipped. */
-    addEvents(events: ReviewEvent[]): Promise<void> {
+    addEvents(events: LogEvent[]): Promise<void> {
       return serially(() =>
         db.transaction(async () => {
           for (const event of events) await db.run(INSERT_EVENT, toRow(event));
@@ -134,14 +134,14 @@ export function createUserStore(db: UserSqlRunner, newId: () => string) {
     },
 
     /** The whole log, oldest first. */
-    async listEvents(): Promise<ReviewEvent[]> {
+    async listEvents(): Promise<LogEvent[]> {
       const rows = await db.all<EventRow>(
         `SELECT id, kind, lemma_id, surah, ayah, word, rating, correct, response_time_ms,
                 timestamp, device_id, utc_offset_minutes
            FROM review_events ORDER BY timestamp, id`,
         [],
       );
-      const events: ReviewEvent[] = [];
+      const events: LogEvent[] = [];
       let invalid = 0;
       for (const row of rows) {
         const event = toEvent(row);

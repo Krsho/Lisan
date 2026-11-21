@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ReviewEvent } from '../engine';
+import type { LogEvent } from '../engine';
 import { openMemoryDb } from '../testing/memoryDb';
 import { MIGRATIONS, migrateUserDb } from './migrations';
 import { createUserStore } from './store';
@@ -199,7 +199,7 @@ describe('user store', () => {
 
   it('never overwrites an event: one added again with the same id is skipped', async () => {
     const store = await openStore();
-    const event: ReviewEvent = {
+    const event: LogEvent = {
       id: 'e1',
       kind: 'learn',
       lemmaId: 'رَحِيم',

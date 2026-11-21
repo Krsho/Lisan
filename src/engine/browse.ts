@@ -1,5 +1,5 @@
 import { lemmaCards } from './cards';
-import type { EventDraft, ReviewEvent } from './events';
+import type { EventDraft, LogEvent } from './events';
 import { knownLemmas, learnedLemmas, type Now, type PathAyah } from './session';
 
 /** Any ayah of the Quran with the lemmas of each of its words (on the curated path or not). */
@@ -13,7 +13,7 @@ export type AyahLemmas = PathAyah;
  * changes learning state by itself: only recording these events does, and they leave the curated
  * path where it was.
  */
-export function addAyahToReview(ayah: AyahLemmas, log: ReviewEvent[], now: Now): EventDraft[] {
+export function addAyahToReview(ayah: AyahLemmas, log: LogEvent[], now: Now): EventDraft[] {
   const skip = new Set([...lemmaCards(log).keys(), ...learnedLemmas(log), ...knownLemmas(log)]);
   const drafts: EventDraft[] = [];
   for (const word of ayah.words) {

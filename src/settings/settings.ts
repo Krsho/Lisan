@@ -6,12 +6,13 @@
  * (an older app version, after sync) keeps it untouched and a bad value only resets that setting.
  */
 
-import { NEW_LEMMA_BUDGET, type Pace } from '../engine';
+import { NEW_LEMMA_BUDGET, type Pace, type PlanSettings } from '../engine';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type ColorSchemeName = 'light' | 'dark';
 
-export type ReadingSettings = {
+/** Everything the learner sets; the pace (PlanSettings) is what the engine plans with. */
+export type AppSettings = PlanSettings & {
   /** Follows the phone's light/dark mode unless overridden. */
   theme: ThemePreference;
   /** Multiplies the size of Quran text on every ayah screen. */
@@ -20,8 +21,6 @@ export type ReadingSettings = {
   showTranslation: boolean;
   /** Whether an ayah's tafsir is open when it is first shown. */
   showTafsir: boolean;
-  /** How many new words a daily session introduces (the engine's new-lemma budget). */
-  pace: Pace;
   /** Whether the learner has been through onboarding (shown on first launch). */
   onboarded: boolean;
   /** Whether the daily reminder notification is on. Off until the learner turns it on. */
@@ -34,9 +33,9 @@ export type ReadingSettings = {
   // the key for anything else.
 };
 
-export type SettingKey = keyof ReadingSettings;
+export type SettingKey = keyof AppSettings;
 
-export const DEFAULT_READING_SETTINGS: ReadingSettings = {
+export const DEFAULT_APP_SETTINGS: AppSettings = {
   theme: 'system',
   arabicFontScale: 1,
   showTranslation: true,
@@ -60,7 +59,7 @@ const THEMES = new Set<unknown>(['system', 'light', 'dark']);
 const PACES = new Set<unknown>(Object.keys(NEW_LEMMA_BUDGET));
 
 /** Returns the value if it is valid for the setting, else undefined. */
-function validate(key: SettingKey, value: unknown): ReadingSettings[SettingKey] | undefined {
+function validate(key: SettingKey, value: unknown): AppSettings[SettingKey] | undefined {
   switch (key) {
     case 'theme':
       return THEMES.has(value) ? (value as ThemePreference) : undefined;
@@ -86,13 +85,13 @@ function validate(key: SettingKey, value: unknown): ReadingSettings[SettingKey] 
   }
 }
 
-const isSettingKey = (key: string): key is SettingKey => key in DEFAULT_READING_SETTINGS;
+const isSettingKey = (key: string): key is SettingKey => key in DEFAULT_APP_SETTINGS;
 
 export type SettingRow = { key: string; value: string };
 
 /** The settings stored in the user database, with defaults for any missing or unreadable. */
-export function parseSettings(rows: readonly SettingRow[]): ReadingSettings {
-  const settings: Record<string, unknown> = { ...DEFAULT_READING_SETTINGS };
+export function parseSettings(rows: readonly SettingRow[]): AppSettings {
+  const settings: Record<string, unknown> = { ...DEFAULT_APP_SETTINGS };
   for (const { key, value } of rows) {
     if (!isSettingKey(key)) continue;
     let parsed: unknown;
@@ -104,11 +103,11 @@ export function parseSettings(rows: readonly SettingRow[]): ReadingSettings {
     const valid = validate(key, parsed);
     if (valid !== undefined) settings[key] = valid;
   }
-  return settings as ReadingSettings;
+  return settings as AppSettings;
 }
 
 /** The rows to store for changed settings. */
-export function serializeSettings(patch: Partial<ReadingSettings>): SettingRow[] {
+export function serializeSettings(patch: Partial<AppSettings>): SettingRow[] {
   return Object.entries(patch)
     .filter(([key, value]) => isSettingKey(key) && value !== undefined)
     .map(([key, value]) => ({ key, value: JSON.stringify(value) }));

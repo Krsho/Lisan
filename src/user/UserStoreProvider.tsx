@@ -11,9 +11,9 @@ import {
 } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { EventDraft, ReviewEvent } from '../engine';
+import type { EventDraft, LogEvent } from '../engine';
 import { SettingsProvider } from '../settings/SettingsContext';
-import { parseSettings, serializeSettings, type ReadingSettings } from '../settings/settings';
+import { parseSettings, serializeSettings, type AppSettings } from '../settings/settings';
 import { useColors } from '../theme/colors';
 import { migrateUserDb } from './migrations';
 import type { UserSqlRunner } from './sql';
@@ -68,7 +68,7 @@ function openUserStore(): Promise<UserStore> {
 
 type EventLog = {
   /** The whole log, oldest first; updated as events are recorded. */
-  events: ReviewEvent[];
+  events: LogEvent[];
   /** Appends events from this device to the log. */
   record(drafts: EventDraft[]): Promise<void>;
 };
@@ -78,7 +78,7 @@ const EventLogContext = createContext<EventLog | null>(null);
 type State =
   | { status: 'opening' }
   | { status: 'failed' }
-  | { status: 'open'; store: UserStore; events: ReviewEvent[]; settings: ReadingSettings };
+  | { status: 'open'; store: UserStore; events: LogEvent[]; settings: AppSettings };
 
 /** Opens and migrates the user database, then provides the event log and settings to the app. */
 export function UserStoreProvider({ children }: { children: ReactNode }) {
@@ -122,7 +122,7 @@ export function UserStoreProvider({ children }: { children: ReactNode }) {
   const log = useMemo(() => (events ? { events, record } : null), [events, record]);
 
   const updateSettings = useCallback(
-    (patch: Partial<ReadingSettings>) => {
+    (patch: Partial<AppSettings>) => {
       // Shown at once; written in the background, since settings are cheap to set again.
       setState((s) => (s.status === 'open' ? { ...s, settings: { ...s.settings, ...patch } } : s));
       store?.saveSettings(serializeSettings(patch), Date.now()).catch((error: unknown) => {

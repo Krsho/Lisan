@@ -7,16 +7,16 @@ import {
   undoKnown,
   type EventDraft,
   type PathAyah,
-  type ReviewEvent,
+  type LogEvent,
   type SessionPlan,
-  type Settings,
+  type PlanSettings,
 } from '.';
 
 // A fixed clock: 21 November 2026, 09:00 UTC, in UTC.
 const DAY = 24 * 60 * 60 * 1000;
 const START = Date.UTC(2026, 10, 21, 9);
 const at = (time: number, utcOffsetMinutes = 0) => ({ time, utcOffsetMinutes });
-const normal: Settings = { pace: 'normal' };
+const normal: PlanSettings = { pace: 'normal' };
 
 /** An ayah whose words have the given lemmas, e.g. ayah(1, 1, ['b', 'ism'], ['allah']). */
 const ayah = (surah: number, number: number, ...words: string[][]): PathAyah => ({
@@ -44,14 +44,14 @@ const content = {
 
 let nextId = 0;
 /** The log after the drafts are recorded on this device. */
-const record = (log: ReviewEvent[], drafts: EventDraft[]): ReviewEvent[] => [
+const record = (log: LogEvent[], drafts: EventDraft[]): LogEvent[] => [
   ...log,
-  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as ReviewEvent),
+  ...drafts.map((d) => ({ ...d, id: `e${nextId++}`, deviceId: 'device-a' }) as LogEvent),
 ];
 
 /** Completes `days` daily sessions in a row, one each day from START. */
 function studyDays(days: number, c = content, settings = normal) {
-  let log: ReviewEvent[] = [];
+  let log: LogEvent[] = [];
   const plans: SessionPlan[] = [];
   for (let day = 0; day < days; day++) {
     const now = at(START + day * DAY);
@@ -144,7 +144,7 @@ describe('the daily new-ayah session', () => {
   it('sets the budget from the pace', () => {
     const path = { path: [ayahOfNewWords(2, 282, 40, 'w')] };
 
-    const budget = (pace: Settings['pace']) =>
+    const budget = (pace: PlanSettings['pace']) =>
       planSession(path, [], { pace }, at(START)).newLemmas.length;
 
     expect(budget('light')).toBeLessThan(budget('normal'));
