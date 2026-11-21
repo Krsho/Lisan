@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AyahPlayButton, RecitationBar } from '../audio/RecitationControls';
+import { audioSource } from '../audio/source';
+import { useAyahPlayback, useSurahDownload } from '../audio/useRecitation';
 import { useContent } from '../content/ContentProvider';
 import type {
   Ayah,
@@ -39,6 +42,8 @@ export function SurahScreen({ summary, initialAyah }: Props) {
   const [failed, setFailed] = useState(false);
   const [selectedWord, setSelectedWord] = useState<WordRef | null>(null);
   const list = useRef<FlatList<Ayah>>(null);
+  const playback = useAyahPlayback(audioSource);
+  const download = useSurahDownload(audioSource, surah, summary.ayahCount);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,6 +87,8 @@ export function SurahScreen({ summary, initialAyah }: Props) {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         data={loaded.ayahs}
+        // Redraw the play buttons when playback changes.
+        extraData={playback}
         keyExtractor={(ayah) => String(ayah.ayah)}
         initialNumToRender={Math.max(8, initialIndex + 4)}
         onLayout={() => {
@@ -95,16 +102,20 @@ export function SurahScreen({ summary, initialAyah }: Props) {
           setTimeout(() => list.current?.scrollToIndex({ index, animated: false }), 100);
         }}
         ListHeaderComponent={
-          loaded.basmala ? (
-            <View style={[styles.basmala, { borderColor: colors.border }]}>
-              <WordRow words={loaded.basmala} onPressWord={(word) => setSelectedWord(word.ref)} />
-            </View>
-          ) : undefined
+          <>
+            <RecitationBar source={audioSource} download={download} error={playback.error} />
+            {loaded.basmala ? (
+              <View style={[styles.basmala, { borderColor: colors.border }]}>
+                <WordRow words={loaded.basmala} onPressWord={(word) => setSelectedWord(word.ref)} />
+              </View>
+            ) : null}
+          </>
         }
         renderItem={({ item: ayah }) => {
           const translation = loaded.translations.get(ayah.ayah);
           return (
             <View style={[styles.ayah, { borderColor: colors.border }]}>
+              <AyahPlayButton ayahRef={{ surah, ayah: ayah.ayah }} playback={playback} />
               <WordRow
                 words={ayah.words}
                 ayahNumber={ayah.ayah}

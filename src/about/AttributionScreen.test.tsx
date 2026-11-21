@@ -49,5 +49,6 @@ it('credits every source with a link, and each QuranEnc edition with its version
   ]) {
     expect(screen.getByText(url)).toBeTruthy();
   }
-  expect(screen.getByText('Reciters')).toBeTruthy();
+  expect(screen.getByText('Reciter: Mishary Rashid Alafasy')).toBeTruthy();
+  expect(screen.getByText('Recitation (Murattal), from Quran Foundation')).toBeTruthy();
 });
