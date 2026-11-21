@@ -19,6 +19,6 @@
       "predictiveBackGestureEnabled": false
     },
     "scheme": "lisan",
-    "plugins": ["expo-router"]
+    "plugins": ["expo-router", "expo-notifications"]
   }
 }
