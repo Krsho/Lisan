@@ -99,6 +99,17 @@ export type AyahTranslation = {
   tafsir: string | null;
 };
 
+/**
+ * A short grammar note authored for Lisan and approved by a maintainer: what a word or particle
+ * does in the ayah, never religious interpretation. Shown apart from the tafsir.
+ */
+export type LinguisticNote = {
+  ayah: number;
+  /** The word the note is about, or null for a note on the whole ayah. */
+  word: number | null;
+  text: string;
+};
+
 /** A published translation or tafsir, with what attribution requires: source and version. */
 export type Edition = {
   kind: 'translation' | 'tafsir';
@@ -174,6 +185,17 @@ export function createContentRepository(db: SqlRunner) {
           WHERE a.surah = ?
           ORDER BY a.ayah`,
         [language, language, surah],
+      );
+    },
+
+    /** A surah's linguistic notes, ayah by ayah, each ayah's own note before its word notes. */
+    async getNotes(surah: number, language: Language): Promise<LinguisticNote[]> {
+      return db.all<LinguisticNote>(
+        `SELECT ayah, NULLIF(word, 0) AS word, text
+           FROM notes
+          WHERE surah = ? AND language = ?
+          ORDER BY ayah, word`,
+        [surah, language],
       );
     },
 

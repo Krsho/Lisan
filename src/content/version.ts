@@ -1,5 +1,5 @@
 /** Version of the bundled content database. Bump whenever the content build output changes. */
-export const CONTENT_VERSION = 5;
+export const CONTENT_VERSION = 6;
 
 /**
  * Table layout of the content database that this app build reads. Bump it when tables or

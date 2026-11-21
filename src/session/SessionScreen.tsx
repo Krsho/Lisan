@@ -23,6 +23,7 @@ import {
   type SessionPlan,
 } from '../engine';
 import { AyahTranslation } from '../reading/AyahTranslation';
+import { LinguisticNotes, notesFor, useLinguisticNotes } from '../reading/LinguisticNotes';
 import { WordDetailSheet } from '../reading/WordDetailSheet';
 import { useColors } from '../theme/colors';
 import { QURAN_FONT_FAMILY } from '../theme/quranFont';
@@ -72,6 +73,8 @@ function Session({ content, onDone }: Props & { content: Content }) {
   const [learnedNow, setLearnedNow] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const known = useMemo(() => knownLemmas(events), [events]);
+  const surahs = useMemo(() => [...new Set(plan.newMaterial.map((p) => p.surah))], [plan]);
+  const notes = useLinguisticNotes(surahs, 'en');
 
   useEffect(() => {
     let cancelled = false;
@@ -172,6 +175,10 @@ function Session({ content, onDone }: Props & { content: Content }) {
                 }
               />
               {translation ? <AyahTranslation data={translation} /> : null}
+              <LinguisticNotes
+                notes={notesFor(notes, passage.surah, passage.ayah)}
+                words={ayah.words}
+              />
             </View>
           ) : null;
         })}

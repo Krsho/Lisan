@@ -7,6 +7,7 @@ import { createContentRepository } from '../../src/content/repository';
 import { buildContentDatabase } from './build';
 import { parseGlossary } from './glossary';
 import { openSqlRunner } from './nodeSqlRunner';
+import { parseNotesFile } from './notes';
 import { parseQulWordByWord } from './qul';
 import { parseQuranEncResult, readQuranEncSqlite } from './quranenc';
 
@@ -66,6 +67,8 @@ const sources = () => ({
   glossary: parseGlossary(
     readFileSync(join(__dirname, '..', '..', 'content', 'glossary.json'), 'utf8'),
   ),
+  // Authored notes on Al-Fatiha in every review status: approved, draft and rejected.
+  notes: [parseNotesFile(fixture('notes-en-1-sample.json'))],
 });
 
 let dir: string;
@@ -466,6 +469,46 @@ describe('content build', () => {
 
     expect(() => build({ glosses: { en: glossForMissingWord } })).toThrow(
       'en gloss 1:4:4 has no matching word',
+    );
+  });
+
+  it('includes only approved linguistic notes, on ayahs and on words', async () => {
+    const content = build();
+
+    const notes = await content.getNotes(1, 'en');
+
+    expect(notes.map(({ ayah, word }) => ({ ayah, word }))).toEqual([
+      { ayah: 2, word: null },
+      { ayah: 2, word: 2 },
+    ]);
+    expect(notes[1].text).toBe('The prefix لِ is a preposition, so ٱللَّهِ after it is genitive.');
+  });
+
+  it('has no notes where none are approved', async () => {
+    const content = build();
+
+    expect(await content.getNotes(114, 'en')).toEqual([]);
+  });
+
+  const withNote = (surah: number, note: { ayah: number; word: number | null }) => ({
+    notes: [
+      {
+        language: 'en',
+        surah,
+        notes: [{ text: 'x', status: 'draft' as const, reviewer: null, draftedBy: null, ...note }],
+      },
+    ],
+  });
+
+  it('refuses a note on an ayah the text does not have, even a draft', () => {
+    expect(() => build(withNote(1, { ayah: 8, word: null }))).toThrow(
+      'en note on 1:8: the text has no such ayah',
+    );
+  });
+
+  it('refuses a note on a word the ayah does not have', () => {
+    expect(() => build(withNote(1, { ayah: 2, word: 5 }))).toThrow(
+      'en note on 1:2:5: the ayah has 4 words',
     );
   });
 });
